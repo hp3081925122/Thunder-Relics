@@ -187,3 +187,5 @@ public final class RoyalStormWave extends Entity {
         attackDamage = tag.getFloat("Damage");
     }
 }
+
+

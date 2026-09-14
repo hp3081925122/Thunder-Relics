@@ -39,3 +39,5 @@ public final class ThrownRoyalWeaponRenderer extends GeoEntityRenderer<ThrownRoy
         pose.mulPose(Axis.XP.rotationDegrees(90.0F - Mth.lerp(partialTick, entity.xRotO, entity.getXRot())));
     }
 }
+
+

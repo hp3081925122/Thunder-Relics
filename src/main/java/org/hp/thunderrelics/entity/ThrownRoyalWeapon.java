@@ -14,8 +14,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.hp.thunderrelics.effect.DecorativeLightning;
 import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 // 复用原版弹体扫掠碰撞，飞行中不追踪目标、不破坏方块。
@@ -110,3 +110,5 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
         return cache;
     }
 }
+
+

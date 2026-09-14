@@ -3,10 +3,10 @@ package org.hp.thunderrelics.client;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.CustomizeGuiOverlayEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.Mod;
 import org.hp.thunderrelics.Thunderrelics;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 
@@ -68,3 +68,5 @@ public final class ThunderBossOverlay {
     // 工具类不创建实例。
     private ThunderBossOverlay() {}
 }
+
+

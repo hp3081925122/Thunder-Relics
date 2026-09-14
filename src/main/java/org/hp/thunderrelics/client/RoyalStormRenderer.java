@@ -322,3 +322,5 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         }
     }
 }
+
+

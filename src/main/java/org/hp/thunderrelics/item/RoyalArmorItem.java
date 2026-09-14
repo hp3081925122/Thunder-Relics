@@ -14,11 +14,11 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.network.chat.Component;
 import java.util.List;
 import javax.annotation.Nullable;
-import net.minecraftforge.client.extensions.common.IClientItemExtensions;
+import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import org.hp.thunderrelics.client.RoyalEquipmentModel;
 import software.bernie.geckolib.animatable.GeoItem;
-import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.renderer.GeoArmorRenderer;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
@@ -124,3 +124,5 @@ public final class RoyalArmorItem extends ArmorItem implements GeoItem {
         });
     }
 }
+
+

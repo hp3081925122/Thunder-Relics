@@ -17,11 +17,11 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import org.hp.thunderrelics.ModEntities;
 import org.hp.thunderrelics.entity.ThrownRoyalWeapon;
-import net.minecraftforge.client.extensions.common.IClientItemExtensions;
+import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import org.hp.thunderrelics.client.RoyalGlaiveRenderer;
 import software.bernie.geckolib.animatable.GeoItem;
-import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 // 王戟作为正常近战物品使用，沿用剑的耐久、附魔和命中流程。
@@ -103,3 +103,5 @@ public final class RoyalGlaiveItem extends SwordItem implements GeoItem {
         });
     }
 }
+
+

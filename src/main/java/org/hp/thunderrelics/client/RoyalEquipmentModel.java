@@ -2,7 +2,7 @@ package org.hp.thunderrelics.client;
 
 import net.minecraft.resources.ResourceLocation;
 import org.hp.thunderrelics.Thunderrelics;
-import software.bernie.geckolib.core.animatable.GeoAnimatable;
+import software.bernie.geckolib.animatable.GeoAnimatable;
 import software.bernie.geckolib.model.GeoModel;
 
 // 王铠与王戟共用静态资源查找方式，几何和贴图仍分别保存。
@@ -27,3 +27,5 @@ public final class RoyalEquipmentModel<T extends GeoAnimatable> extends GeoModel
     @Override
     public ResourceLocation getAnimationResource(T item) { return ANIMATION; }
 }
+
+

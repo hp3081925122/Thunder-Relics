@@ -49,3 +49,5 @@ public final class RoyalGlaiveRenderer extends GeoItemRenderer<RoyalGlaiveItem> 
         }
     }
 }
+
+

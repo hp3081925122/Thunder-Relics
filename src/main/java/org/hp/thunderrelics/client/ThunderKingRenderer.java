@@ -6,7 +6,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 import software.bernie.geckolib.cache.object.GeoBone;
-import software.bernie.geckolib.util.RenderUtils;
+import software.bernie.geckolib.util.RenderUtil;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.RenderType;
 import org.joml.Matrix4f;
@@ -66,3 +66,5 @@ public final class ThunderKingRenderer extends GeoEntityRenderer<ThunderKingEnti
                 && frustum.isVisible(entity.getBoundingBox().inflate(4)));
     }
 }
+
+

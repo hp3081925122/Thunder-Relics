@@ -26,3 +26,5 @@ public final class ThunderKingModel extends GeoModel<ThunderKingEntity> {
         return ANIMATION;
     }
 }
+
+
