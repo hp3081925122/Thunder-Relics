@@ -1,0 +1,142 @@
+// 当前文件使用 Forge 47.4.23、GeckoLib 4.8.2 和 Sponge Mixin 重映射配置。
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    dependencies {
+        // GeckoLib 客户端 Mixin 在开发运行时需要该重映射插件。
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+// 为 Forge 开发客户端生成当前映射下的 Mixin refmap。
+apply plugin: 'org.spongepowered.mixin'
+
+version = project.mod_version
+group = project.mod_group_id
+
+base {
+    archivesName = project.mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: project.mapping_channel, version: project.mapping_version
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+
+            mods {
+                "${project.mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client {
+            property 'forge.enabledGameTestNamespaces', project.mod_id
+            // 仅显式传入开发参数时启用本地刀光调试，不随正式模组默认开启。
+            if (project.hasProperty('royalDebug')) property 'thunderrelics.debug', 'true'
+        }
+
+        server {
+            args '--nogui'
+        }
+
+        gameTestServer {
+            property 'forge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+mixin {
+    add sourceSets.main, "${project.mod_id}.refmap.json"
+    config "${project.mod_id}.mixins.json"
+}
+
+// GeckoLib 依赖从已核对的 CurseMaven 文件获取，保持 1.20.1 Forge 版本一致。
+repositories {
+    maven { url = 'https://www.cursemaven.com'; content { includeGroup 'curse.maven' } }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
+    // GeckoLib 4.8.2 提供 GeoEntity、GeoModel 和实体动画控制器。
+    implementation fg.deobf("curse.maven:geckolib-388172:7025129")
+    // Mixin 注解处理器生成项目自身的 refmap，避免开发端丢失映射。
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    // 资源展开统一使用 UTF-8，避免中文元数据被系统默认编码破坏。
+    filteringCharset = 'UTF-8'
+    def replaceProperties = [
+            minecraft_version: project.minecraft_version,
+            minecraft_version_range: project.minecraft_version_range,
+            forge_version: project.forge_version,
+            forge_version_range: project.forge_version_range,
+            loader_version_range: project.loader_version_range,
+            mod_id: project.mod_id,
+            mod_name: project.mod_name,
+            mod_license: project.mod_license,
+            mod_version: project.mod_version,
+            mod_authors: project.mod_authors,
+            mod_description: project.mod_description
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+                'Specification-Title': project.mod_id,
+                'Specification-Vendor': project.mod_authors,
+                'Specification-Version': '1',
+                'Implementation-Title': project.name,
+                'Implementation-Version': project.jar.archiveVersion,
+                'Implementation-Vendor': project.mod_authors
+        ])
+    }
+    finalizedBy 'reobfJar'
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact jar
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

@@ -1,0 +1,15 @@
+{
+  "entity.thunderrelics.thunder_king": "Thunder King",
+  "entity.thunderrelics.thrown_royal_weapon": "Thrown Royal Glaive",
+  "item.thunderrelics.thunder_king_spawn_egg": "Thunder King Spawn Egg",
+  "item.thunderrelics.royal_helmet": "Thunder Crown",
+  "item.thunderrelics.royal_chestplate": "Thunder Royal Chestplate",
+  "item.thunderrelics.royal_leggings": "Thunder Royal Leggings",
+  "item.thunderrelics.royal_boots": "Thunder Royal Boots",
+  "item.thunderrelics.royal_glaive": "Royal Glaive",
+  "item.thunderrelics.royal_helmet.tooltip": "When an enemy targets you: summon decorative lightning at the enemy, dealing 10 damage and setting it on fire for 10 seconds.",
+  "item.thunderrelics.royal_chestplate.tooltip": "When hurt, 30% chance to summon decorative lightning at the enemy, dealing 3 damage and setting it on fire for 3 seconds. Cooldown: 1 second.",
+  "item.thunderrelics.royal_leggings.tooltip": "While raining or in water: gain Regeneration I and Strength II.",
+  "item.thunderrelics.royal_boots.tooltip": "Gain Speed II and walk across water on a short-lived ice layer.",
+  "item.thunderrelics.royal_glaive.tooltip": "Hold right-click to throw. On hit, deal 1.5× your attack damage, then summon decorative lightning against nearby enemies."
+}

@@ -1,0 +1,15 @@
+{
+  "entity.thunderrelics.thunder_king": "雷霆君王",
+  "entity.thunderrelics.thrown_royal_weapon": "雷霆王戟",
+  "item.thunderrelics.thunder_king_spawn_egg": "雷霆君王刷怪蛋",
+  "item.thunderrelics.royal_helmet": "雷霆王冠",
+  "item.thunderrelics.royal_chestplate": "雷霆王铠",
+  "item.thunderrelics.royal_leggings": "雷霆王胫",
+  "item.thunderrelics.royal_boots": "雷霆战靴",
+  "item.thunderrelics.royal_glaive": "雷霆王戟",
+  "item.thunderrelics.royal_helmet.tooltip": "被敌方生物索敌时：在敌人位置召唤装饰雷霆，造成10点伤害并使其着火10秒。",
+  "item.thunderrelics.royal_chestplate.tooltip": "受伤时有30%概率：在敌人位置召唤装饰雷霆，造成3点伤害并使其着火3秒，冷却1秒。",
+  "item.thunderrelics.royal_leggings.tooltip": "下雨或身处水中时：获得生命恢复 I 与力量 II。",
+  "item.thunderrelics.royal_boots.tooltip": "获得速度 II，并可借助短暂冰层在水面行走。",
+  "item.thunderrelics.royal_glaive.tooltip": "长按右键投掷；命中造成自身攻击力 × 1.5 的伤害，并在落点召唤装饰雷霆攻击周围敌人。"
+}
