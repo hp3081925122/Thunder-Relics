@@ -12,6 +12,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 import org.hp.thunderrelics.entity.ThrownRoyalWeapon;
+import org.hp.thunderrelics.entity.RoyalStormWave;
 
 // 集中注册雷霆君王实体与刷怪蛋，公共代码不引用客户端渲染类。
 public final class ModEntities {
@@ -33,6 +34,11 @@ public final class ModEntities {
                     .build(Thunderrelics.MOD_ID + ":thrown_royal_weapon"));
 
     // 使用深蓝钢甲和金色装饰作为刷怪蛋的两个代表色。
+    public static final RegistryObject<EntityType<RoyalStormWave>> ROYAL_STORM_WAVE = ENTITIES.register("royal_storm_wave",
+            () -> EntityType.Builder.of(RoyalStormWave::new, MobCategory.MISC).sized(.1F, .1F)
+                    .clientTrackingRange(12).updateInterval(20).build(Thunderrelics.MOD_ID + ":royal_storm_wave"));
+
+    // 刷怪蛋沿用主体的钢甲和金边颜色。
     public static final RegistryObject<Item> THUNDER_KING_SPAWN_EGG = ITEMS.register("thunder_king_spawn_egg",
             () -> new ForgeSpawnEggItem(THUNDER_KING, 0x27364A, 0xC8A85B, new Item.Properties()));
 

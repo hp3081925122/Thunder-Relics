@@ -64,6 +64,8 @@ public final class RoyalSlashDebug {
     public static void tick(TickEvent.ClientTickEvent event) {
         if (!ENABLED || event.phase != TickEvent.Phase.END) return;
         Minecraft mc = Minecraft.getInstance();
+        // 调试客户端失去焦点时仍保持客户端刻运行，文件桥才能在终端操作期间继续响应。
+        mc.options.pauseOnLostFocus = false;
         if (warmup > 0 && --warmup == 0 && mc.getSingleplayerServer() != null) {
             mc.getSingleplayerServer().execute(() -> {
                 var level = mc.getSingleplayerServer().overworld();
@@ -83,13 +85,17 @@ public final class RoyalSlashDebug {
                 case "open" -> {
                     // 只允许打开显式制作的测试副本，拒绝调试命令改动原存档。
                     String world = json.get("world").getAsString();
-                    if (mc.level != null || !world.matches("royal-slash-debug-[a-zA-Z0-9_-]+"))
-                        throw new IllegalStateException("Only a debug world may be opened from the title screen");
+                    if (!world.matches("royal-slash-debug-[a-zA-Z0-9_-]+"))
+                        throw new IllegalStateException("Only a debug world may be opened");
+                    // 开发客户端可能自动恢复上次单人世界，先走正常保存断开流程再切到测试副本。
+                    if (mc.level != null) mc.clearLevel(new TitleScreen());
                     testWorld = true;
                     mc.createWorldOpenFlows().loadLevel(new TitleScreen(), world);
                     status("opening", world);
                 }
                 case "run" -> run(mc, json);
+                // 王庭框架、内饰和技能实机检查共用受限的测试副本入口。
+                case "court_frame", "court_detail", "court_export", "court_view", "court_storm", "court_prepare", "court_cast", "court_place" -> RoyalCourtDebug.execute(mc, json);
                 case "snapshot" -> {
                     try (var image = Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
                         image.writeToFile(ROOT.resolve("snapshot.png"));
@@ -201,7 +207,8 @@ public final class RoyalSlashDebug {
             if (entity.getUUID().equals(bossId) && entity instanceof ThunderKingEntity found) { boss = found; break; }
         if (boss == null || boss.getSwingStart() < 0) return;
         double age = mc.level.getGameTime() + event.renderTickTime - boss.getSwingStart();
-        int end = kind == 0 ? 38 : kind == 1 ? 52 : kind == 2 ? 46 : 51;
+        // 调试采集窗口跟随加速后的近战动画，额外保留少量余辉观察时间。
+        int end = kind == 0 ? 34 : kind == 1 ? 46 : kind == 2 ? 42 : 46;
         if (age > end) {
             try {
                 Files.writeString(captureFolder.resolve("trajectory.csv"), trace, StandardCharsets.UTF_8);

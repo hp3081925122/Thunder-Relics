@@ -38,8 +38,8 @@ public final class RoyalEquipmentEvents {
                 || mob.isAlliedTo(player) || mob.getPersistentData().getBoolean(CROWN_TRIGGERED_KEY)) return;
         // 在结算前记录标记，防止同一实体重复切换目标时再次触发。
         mob.getPersistentData().putBoolean(CROWN_TRIGGERED_KEY, true);
-        // 敌方生物是索敌事件的发起者，雷霆应落在敌方生物位置并由它承受反击。
-        Vec3 enemyPosition = mob.position().add(0, mob.getBbHeight(), 0);
+        // 敌方生物是索敌事件的发起者，雷霆固定落在敌方生物脚下并由它承受反击。
+        Vec3 enemyPosition = mob.position();
         DecorativeLightning.strike(player.level(), enemyPosition, player, mob, 10.0F, 10);
         LogUtils.getLogger().debug("Royal crown retaliation: enemy={}, enemyPos={}, player={}",
                 mob.getType().builtInRegistryHolder().key().location(), enemyPosition, player.getUUID());
@@ -56,7 +56,8 @@ public final class RoyalEquipmentEvents {
         long ready = CHEST_COOLDOWN.getOrDefault(player.getUUID(), Long.MIN_VALUE);
         if (now < ready || player.getRandom().nextFloat() >= 0.30F) return;
         CHEST_COOLDOWN.put(player.getUUID(), now + 20L);
-        DecorativeLightning.strike(player.level(), enemy.position().add(0, enemy.getBbHeight(), 0), player,
+        // 反击雷霆固定落在攻击者脚下，避免闪电漂浮到身体上方。
+        DecorativeLightning.strike(player.level(), enemy.position(), player,
                 enemy, 3.0F, 3);
     }
 

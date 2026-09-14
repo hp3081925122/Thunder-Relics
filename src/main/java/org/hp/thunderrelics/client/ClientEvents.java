@@ -28,6 +28,8 @@ public final class ClientEvents {
         event.registerEntityRenderer(ModEntities.THUNDER_KING.get(), ThunderKingRenderer::new);
         // 飞行武器使用与本体分离的渲染器。
         event.registerEntityRenderer(ModEntities.THROWN_ROYAL_WEAPON.get(), ThrownRoyalWeaponRenderer::new);
+        // 同一渲染器绘制整波预警、落雷和余波电弧。
+        event.registerEntityRenderer(ModEntities.ROYAL_STORM_WAVE.get(), RoyalStormRenderer::new);
     }
 
     private ClientEvents() {

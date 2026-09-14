@@ -15,14 +15,15 @@ public final class DecorativeLightning {
     private DecorativeLightning() {
     }
 
-    // 生成不会点火、不会触发附近实体雷击的视觉闪电，并对单个目标结算伤害。
+    // 生成不会点火、不会触发附近实体雷击的视觉闪电，并对单个目标结算伤害；有目标时固定落在目标脚下。
     public static void strike(Level level, Vec3 position, @Nullable Entity source,
                               @Nullable LivingEntity target, float damage, int fireSeconds) {
         if (level.isClientSide) return;
         LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(level);
         if (bolt != null) {
             bolt.setVisualOnly(true);
-            bolt.setPos(position.x, position.y, position.z);
+            Vec3 feet = target == null ? position : target.position();
+            bolt.setPos(feet.x, feet.y, feet.z);
             level.addFreshEntity(bolt);
         }
         if (target != null && target.isAlive()) {

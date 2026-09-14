@@ -31,6 +31,10 @@ public final class ThunderKingRenderer extends GeoEntityRenderer<ThunderKingEnti
         if (RoyalSlashDebug.ENABLED) getGeoModel().getBone("weapon_head").ifPresent(bone -> bone.setTrackingMatrices(true));
         super.render(entity, yaw, partialTick, pose, buffers, light);
         slash.render(entity, getGeoModel(), bladeTransform, pose, buffers, partialTick);
+        // 引雷仪式双手举高武器时，以真实武器骨骼顶部为端点绘制接引雷霆。
+        RoyalStormRenderer.renderWeaponRelay(entity, bladeTransform, pose, buffers, partialTick);
+        // 双手下劈的雷电使用同一个真实刃头矩阵，避免特效与挥砍方向脱节。
+        RoyalStormRenderer.renderSlamLightning(entity, bladeTransform, pose, buffers, partialTick);
     }
 
     // 使用与实际武器绘制完全相同的父级、枢轴和旋转，采集未经辅助方法加工的刃头矩阵。

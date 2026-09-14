@@ -65,13 +65,21 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
     @Override
     protected void onHit(HitResult result) {
         super.onHit(result);
-        // 玩家投掷命中后只召唤一道装饰雷霆，并对周围敌人追加小范围伤害。
-        if (!level().isClientSide && getOwner() instanceof Player player) {
-            Vec3 impact = result.getLocation();
-            DecorativeLightning.strikeArea(level(), impact, player,
-                    result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof LivingEntity living
-                            ? living : null,
-                    (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.5F, 0, 4.0D);
+        if (!level().isClientSide && getOwner() instanceof LivingEntity owner) {
+            // 命中生物时把雷霆落点改为生物脚下；命中方块时保留实际碰撞点。
+            Vec3 impact = result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof LivingEntity living
+                    ? living.position() : result.getLocation();
+            LivingEntity hitLiving = result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof LivingEntity living
+                    ? living : null;
+            if (result.getType() == HitResult.Type.BLOCK) {
+                // 命中方块后生成半径八格的圆圈预警，随后由预警实体统一落雷和结算伤害。
+                RoyalStormWave.spawnImpactArea(owner, impact, 8.0D,
+                        (float) owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.5F);
+            } else if (owner instanceof Player player) {
+                // 玩家投掷命中生物时保留原有装饰雷霆范围伤害，并排除直击目标避免重复结算。
+                DecorativeLightning.strikeArea(level(), impact, player, hitLiving,
+                        (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.5F, 0, 4.0D);
+            }
         }
         if (!level().isClientSide) {
             playSound(SoundEvents.TRIDENT_HIT, 1.0F, 0.8F);

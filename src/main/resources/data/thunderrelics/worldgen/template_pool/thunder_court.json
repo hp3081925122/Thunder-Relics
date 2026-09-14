@@ -1,0 +1,13 @@
+{
+  "name": "thunderrelics:thunder_court",
+  "fallback": "minecraft:empty",
+  "elements": [{
+    "weight": 1,
+    "element": {
+      "element_type": "minecraft:single_pool_element",
+      "location": "thunderrelics:thunder_court",
+      "processors": "minecraft:empty",
+      "projection": "rigid"
+    }
+  }]
+}

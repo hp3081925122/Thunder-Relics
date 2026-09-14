@@ -17,6 +17,8 @@ import java.util.WeakHashMap;
 
 // 直接绘制有宽度和渐变的刀光网格，不使用原版粒子拼接主体。
 public final class RoyalSlashRenderer {
+    // 刀光窗口与服务端攻击周期保持相同的八成时长。
+    private static final double COMBAT_RATE = 0.80D;
     private final Map<ThunderKingEntity, Trail> trails = new WeakHashMap<>();
 
     // 延长残光后最多保留六十四段，缓存不反向引用实体，换世界后可自动回收。
@@ -49,7 +51,7 @@ public final class RoyalSlashRenderer {
         long start = entity.getSwingStart();
         double now = entity.level().getGameTime() + partialTick;
         double age = now - start;
-        if (!entity.isAlive() || kind < 0 || kind > 3 || age < 0 || age > 40) {
+        if (!entity.isAlive() || kind < 0 || kind > 3 || age < 0 || age > 36) {
             trails.remove(entity);
             return;
         }
@@ -60,13 +62,14 @@ public final class RoyalSlashRenderer {
             trail.lastSample = Double.NEGATIVE_INFINITY;
         }
         // 每段残光寿命翻倍：横斩与连斩半秒，重劈七成秒。
-        double life = kind >= 2 ? 14.0D : 10.0D;
+        double life = kind >= 2 ? 8.0D : 6.0D;
         trail.samples.removeIf(sample -> now - sample.time() > life || now < sample.time());
         boolean active = switch (kind) {
-            case 0 -> age >= 10.5D && age <= 15.5D;
-            case 1 -> age >= 10.5D && age <= 15.5D || age >= 22.0D && age <= 28.0D;
-            case 2 -> age >= 15.0D && age <= 21.0D;
-            default -> age >= 18.5D && age <= 24.5D;
+            case 0 -> age >= 10.5D * COMBAT_RATE && age <= 15.5D * COMBAT_RATE;
+            case 1 -> age >= 10.5D * COMBAT_RATE && age <= 15.5D * COMBAT_RATE
+                    || age >= 22.0D * COMBAT_RATE && age <= 28.0D * COMBAT_RATE;
+            case 2 -> age >= 15.0D * COMBAT_RATE && age <= 21.0D * COMBAT_RATE;
+            default -> age >= 18.5D * COMBAT_RATE && age <= 24.5D * COMBAT_RATE;
         };
         Vec3 entityPosition = entity.getPosition(partialTick);
         // 世界坐标保存旧刀光，使生物移动时残光留在原挥砍位置。
@@ -79,7 +82,7 @@ public final class RoyalSlashRenderer {
             Vector4f outer = bladeTransform.transform(new Vector4f(0, 1.66F, 0, 1));
             Vector4f inner = bladeTransform.transform(new Vector4f(0, 1.66F - width, 0, 1));
             Sample sample = new Sample(now, new Vec3(outer.x(), outer.y(), outer.z()).add(entityPosition),
-                    new Vec3(inner.x(), inner.y(), inner.z()).add(entityPosition), kind == 1 && age >= 22 ? 1 : 0);
+                    new Vec3(inner.x(), inner.y(), inner.z()).add(entityPosition), kind == 1 && age >= 22.0D * COMBAT_RATE ? 1 : 0);
             if (!trail.samples.isEmpty() && sample.outer().distanceToSqr(trail.samples.get(trail.samples.size() - 1).outer()) > 16) {
                 trail.samples.clear();
             }
