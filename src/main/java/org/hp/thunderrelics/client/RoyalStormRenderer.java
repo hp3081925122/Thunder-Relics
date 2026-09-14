@@ -5,7 +5,7 @@ import net.minecraft.client.renderer.*;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.Vec3;
 import org.hp.thunderrelics.entity.RoyalStormWave;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
@@ -14,76 +14,87 @@ import org.joml.Vector4f;
 import java.util.Random;
 
 // 蓝色符环、立体落雷和地面电弧都直接绘制网格，使用固定种子保持连续形状。
-public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
-    private static final class Material extends RenderType {
-        static final RenderType TYPE = create("royal_storm", DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS,
-                65536, false, true, CompositeState.builder().setShaderState(RENDERTYPE_LIGHTNING_SHADER)
-                .setTransparencyState(LIGHTNING_TRANSPARENCY).setCullState(NO_CULL).setWriteMaskState(COLOR_WRITE)
-                .setOutputState(MAIN_TARGET).createCompositeState(false));
-        Material() { super("royal_storm_base", DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 65536, false, true, () -> {}, () -> {}); }
+public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave, RoyalStormRenderer.State> {
+    // 延迟提交只读取快照，落点转换为相对实体中心的坐标。
+    public static final class State extends net.minecraft.client.renderer.entity.state.EntityRenderState {
+        double age;
+        int id;
+        java.util.List<Vec3> points = java.util.List.of();
     }
+    // 原版雷电管线提供当前版本的颜色网格和透明混合。
     public RoyalStormRenderer(EntityRendererProvider.Context context) { super(context); }
     @Override
-    public ResourceLocation getTextureLocation(RoyalStormWave entity) { return new ResourceLocation("minecraft", "textures/misc/white.png"); }
+    public State createRenderState() { return new State(); }
+    // 提取世界时间和落点，避免提交回调持有可变实体。
+    @Override
+    public void extractRenderState(RoyalStormWave wave, State state, float partialTick) {
+        super.extractRenderState(wave, state, partialTick);
+        state.age = wave.age(partialTick);
+        state.id = wave.getId();
+        state.points = wave.points().stream().map(point -> point.subtract(wave.position())).toList();
+    }
     // 波次实体在场地中央，但边缘落点也需要渲染，因此用场地距离判断。
     @Override
     public boolean shouldRender(RoyalStormWave entity, Frustum frustum, double x, double y, double z) { return entity.distanceToSqr(x, y, z) < 160 * 160; }
 
+    // 新版通过提交队列绘制自定义网格，保留原有圆环和电弧算法。
     @Override
-    public void render(RoyalStormWave wave, float yaw, float partialTick, PoseStack pose, MultiBufferSource buffers, int light) {
-        double age = wave.age(partialTick);
+    public void submit(State state, PoseStack pose, SubmitNodeCollector collector,
+                       net.minecraft.client.renderer.state.level.CameraRenderState camera) {
+        double age = state.age;
         if (age < 0 || age > RoyalStormWave.LIFE_TICKS) return;
-        VertexConsumer vertices = buffers.getBuffer(Material.TYPE);
-        Matrix4f matrix = pose.last().pose();
-        // 落雷阶段在场地上方增加一层随机电弧，轨迹固定后再随时间淡出，避免画面闪烁。
-        if (age >= RoyalStormWave.WARNING_TICKS)
-            airborneArcs(vertices, matrix, wave, age - RoyalStormWave.WARNING_TICKS);
-        int index = 0;
-        for (Vec3 world : wave.points()) {
-            Vec3 p = world.subtract(wave.position());
-            // 外环交代实际危险范围，内圈不断收束，四条短辐条强化落点识别。
-            if (age < RoyalStormWave.WARNING_TICKS) {
-                double progress = age / RoyalStormWave.WARNING_TICKS, radius = 2.3 * (1 - progress) + .18;
-                ring(vertices, matrix, p, 1.55, .075, .12F, .45F, 1, .9F);
-                ring(vertices, matrix, p.add(0, .012, 0), radius, .13, .4F, .85F, 1, 1);
-                for (int i = 0; i < 4; i++) {
-                    double a = i * Math.PI / 2 + progress * .35;
-                    segment(vertices, matrix, p.add(Math.cos(a) * .35, .025, Math.sin(a) * .35),
-                            p.add(Math.cos(a) * .85, .025, Math.sin(a) * .85), .035, .4F, .8F, 1, .95F);
+        collector.submitCustomGeometry(pose, RenderTypes.lightning(), (entry, vertices) -> {
+            Matrix4f matrix = new Matrix4f(entry.pose());
+            // 落雷阶段在场地上方增加一层随机电弧，轨迹固定后再随时间淡出，避免画面闪烁。
+            if (age >= RoyalStormWave.WARNING_TICKS)
+                airborneArcs(vertices, matrix, state.id, age - RoyalStormWave.WARNING_TICKS);
+            int index = 0;
+            for (Vec3 p : state.points) {
+
+                // 外环交代实际危险范围，内圈不断收束，四条短辐条强化落点识别。
+                if (age < RoyalStormWave.WARNING_TICKS) {
+                    double progress = age / RoyalStormWave.WARNING_TICKS, radius = 2.3 * (1 - progress) + .18;
+                    ring(vertices, matrix, p, 1.55, .075, .12F, .45F, 1, .9F);
+                    ring(vertices, matrix, p.add(0, .012, 0), radius, .13, .4F, .85F, 1, 1);
+                    for (int i = 0; i < 4; i++) {
+                        double a = i * Math.PI / 2 + progress * .35;
+                        segment(vertices, matrix, p.add(Math.cos(a) * .35, .025, Math.sin(a) * .35),
+                                p.add(Math.cos(a) * .85, .025, Math.sin(a) * .85), .035, .4F, .8F, 1, .95F);
+                    }
+                } else {
+                    // 一次落雷持续七刻并快速衰减；蓝色包边内保留清晰的白色电芯。
+                    double t = age - RoyalStormWave.WARNING_TICKS;
+                    Random random = new Random(87123L + state.id * 1009L + index * 977L);
+                    if (t < 7) {
+                        float alpha = (float) Math.max(0, 1 - t / 7);
+                        // 落雷主体使用三层锥形电束，端点收束后不会像一根等粗塑料管。
+                        Vec3 sky = p.add((random.nextDouble() - .5) * 2.5, 33.6, (random.nextDouble() - .5) * 2.5);
+                        lightningPath(vertices, matrix, sky, p, random, 12, .20D, alpha, .95D);
+                        // 贴图粒子中的瞬时闪白改为纯代码星芒，命中时只出现极短一闪。
+                        if (t < 3.5D)
+                            flashBurst(vertices, matrix, p.add(0, .12, 0), random, 1.15D,
+                                    alpha * (float) (1.0D - t / 3.5D));
+                    }
+                    // 命中瞬间显示十二条完整的独立随机路径，只做整体淡出，不播放蔓延动画。
+                    random.setSeed(43971L + state.id * 1009L + index * 977L);
+                    float fade = (float) Math.max(0, 1 - t / 24);
+                    double reach = 2.8;
+                    ring(vertices, matrix, p, Math.max(.1, reach), .07, .3F, .7F, 1, fade * .6F);
+                    for (int arm = 0; arm < 12; arm++) {
+                        // 每条电弧独立抽取方向、长度和侧向偏移，不再组成规则放射图案。
+                        double angle = random.nextDouble() * Math.PI * 2;
+                        double totalReach = reach * (.55 + random.nextDouble() * .45);
+                        Vec3 start = p.add(0, .07, 0);
+                        Vec3 end = start.add(Math.cos(angle) * totalReach, .08 + random.nextDouble() * .3,
+                                Math.sin(angle) * totalReach);
+                        // 地面余波同样使用逐段收束，分叉末端更细，电弧会更像放电而非硬质模型。
+                        lightningPath(vertices, matrix, start, end, random, 6, .07D,
+                                fade * (.72F + random.nextFloat() * .28F), .85D);
+                    }
                 }
-            } else {
-                // 一次落雷持续七刻并快速衰减；蓝色包边内保留清晰的白色电芯。
-                double t = age - RoyalStormWave.WARNING_TICKS;
-                Random random = new Random(87123L + wave.getId() * 1009L + index * 977L);
-                if (t < 7) {
-                    float alpha = (float) Math.max(0, 1 - t / 7);
-                    // 落雷主体使用三层锥形电束，端点收束后不会像一根等粗塑料管。
-                    Vec3 sky = p.add((random.nextDouble() - .5) * 2.5, 33.6, (random.nextDouble() - .5) * 2.5);
-                    lightningPath(vertices, matrix, sky, p, random, 12, .20D, alpha, .95D);
-                    // 贴图粒子中的瞬时闪白改为纯代码星芒，命中时只出现极短一闪。
-                    if (t < 3.5D)
-                        flashBurst(vertices, matrix, p.add(0, .12, 0), random, 1.15D,
-                                alpha * (float) (1.0D - t / 3.5D));
-                }
-                // 命中瞬间显示十二条完整的独立随机路径，只做整体淡出，不播放蔓延动画。
-                random.setSeed(43971L + wave.getId() * 1009L + index * 977L);
-                float fade = (float) Math.max(0, 1 - t / 24);
-                double reach = 2.8;
-                ring(vertices, matrix, p, Math.max(.1, reach), .07, .3F, .7F, 1, fade * .6F);
-                for (int arm = 0; arm < 12; arm++) {
-                    // 每条电弧独立抽取方向、长度和侧向偏移，不再组成规则放射图案。
-                    double angle = random.nextDouble() * Math.PI * 2;
-                    double totalReach = reach * (.55 + random.nextDouble() * .45);
-                    Vec3 start = p.add(0, .07, 0);
-                    Vec3 end = start.add(Math.cos(angle) * totalReach, .08 + random.nextDouble() * .3,
-                            Math.sin(angle) * totalReach);
-                    // 地面余波同样使用逐段收束，分叉末端更细，电弧会更像放电而非硬质模型。
-                    lightningPath(vertices, matrix, start, end, random, 6, .07D,
-                            fade * (.72F + random.nextFloat() * .28F), .85D);
-                }
+                index++;
             }
-            index++;
-        }
+        });
     }
 
     // 双手举高武器的仪式阶段持续接引雷霆；端点使用武器头骨骼矩阵，保证特效不会漂离武器。
@@ -99,7 +110,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         float alpha = fadeIn * fadeOut * pulse;
         if (alpha <= 0.01F) return;
 
-        VertexConsumer vertices = buffers.getBuffer(Material.TYPE);
+        VertexConsumer vertices = buffers.getBuffer(RenderTypes.lightning());
         Matrix4f matrix = pose.last().pose();
         // weapon_head 的局部 Y 轴长度来自模型武器尖端（约 24 像素），因此端点会随动画精确移动。
         Vector4f transformedTip = weaponTransform.transform(new Vector4f(0.0F, 1.52F, 0.0F, 1.0F));
@@ -149,7 +160,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         if (!entity.isAlive() || weaponTransform == null || entity.getSwingKind() != 3) return;
         double age = entity.level().getGameTime() + partialTick - entity.getSwingStart();
         if (age < 5.0D || age > 23.0D) return;
-        VertexConsumer vertices = buffers.getBuffer(Material.TYPE);
+        VertexConsumer vertices = buffers.getBuffer(RenderTypes.lightning());
         Matrix4f matrix = pose.last().pose();
         float fade = (float) Math.min(1.0D, Math.min((age - 5.0D) / 5.0D, (23.0D - age) / 4.0D));
         // 固定周期内保持路径一致，骨骼变换每帧更新，让电弧随武器运动。
@@ -175,11 +186,11 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
     }
 
     // 在波次中心上方铺开随机高度和随机方向的电弧，形成雷雨云层中的二级电场。
-    private static void airborneArcs(VertexConsumer v, Matrix4f m, RoyalStormWave wave, double elapsed) {
+    private static void airborneArcs(VertexConsumer v, Matrix4f m, int waveId, double elapsed) {
         // 空中电弧也在落雷出现的同一帧完整显示，只随生命周期整体淡出。
         float fade = (float) Math.max(0, 1 - elapsed / 28);
         if (fade <= 0) return;
-        Random random = new Random(0x5EEDL + wave.getId() * 31337L);
+        Random random = new Random(0x5EEDL + waveId * 31337L);
         Vec3 center = Vec3.ZERO;
         for (int arc = 0; arc < 18; arc++) {
             double startAngle = random.nextDouble() * Math.PI * 2;
@@ -202,10 +213,10 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
             double a = i * Math.PI / 24, b = (i + 1) * Math.PI / 24;
             // 直接提交四个顶点，避免多波预警时每帧创建上万个临时数组。
             double ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);
-            v.vertex(m,(float)(p.x+ca*r),(float)p.y,(float)(p.z+sa*r)).color(red,green,blue,alpha).endVertex();
-            v.vertex(m,(float)(p.x+cb*r),(float)p.y,(float)(p.z+sb*r)).color(red,green,blue,alpha).endVertex();
-            v.vertex(m,(float)(p.x+cb*(r+width)),(float)p.y,(float)(p.z+sb*(r+width))).color(red,green,blue,alpha).endVertex();
-            v.vertex(m,(float)(p.x+ca*(r+width)),(float)p.y,(float)(p.z+sa*(r+width))).color(red,green,blue,alpha).endVertex();
+            v.addVertex(m,(float)(p.x+ca*r),(float)p.y,(float)(p.z+sa*r)).setColor(red,green,blue,alpha);
+            v.addVertex(m,(float)(p.x+cb*r),(float)p.y,(float)(p.z+sb*r)).setColor(red,green,blue,alpha);
+            v.addVertex(m,(float)(p.x+cb*(r+width)),(float)p.y,(float)(p.z+sb*(r+width))).setColor(red,green,blue,alpha);
+            v.addVertex(m,(float)(p.x+ca*(r+width)),(float)p.y,(float)(p.z+sa*(r+width))).setColor(red,green,blue,alpha);
         }
     }
     // 两片互相垂直的四边形使电弧从侧面也能看见。
@@ -216,7 +227,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         Vec3 other = axis.cross(side).normalize().scale(width);
         for (Vec3 offset : new Vec3[]{side, other})
             for (Vec3 point : new Vec3[]{a.add(offset), b.add(offset), b.subtract(offset), a.subtract(offset)})
-                v.vertex(m, (float) point.x, (float) point.y, (float) point.z).color(red, green, blue, alpha).endVertex();
+                v.addVertex(m, (float) point.x, (float) point.y, (float) point.z).setColor(red, green, blue, alpha);
     }
 
     // 生成一条受控随机折点、端点收束、分叉和三层亮度的连续电束。
@@ -322,5 +333,3 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         }
     }
 }
-
-

@@ -1,6 +1,5 @@
 package org.hp.thunderrelics.entity;
 
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -9,17 +8,19 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.projectile.ThrowableProjectile;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.hp.thunderrelics.effect.DecorativeLightning;
-import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.animation.AnimatableManager;
-import software.bernie.geckolib.util.GeckoLibUtil;
+import com.geckolib.animatable.GeoAnimatable;
+import com.geckolib.animatable.instance.AnimatableInstanceCache;
+import com.geckolib.animatable.manager.AnimatableManager;
+import com.geckolib.util.GeckoLibUtil;
 
 // 复用原版弹体扫掠碰撞，飞行中不追踪目标、不破坏方块。
-public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoEntity {
+public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoAnimatable {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private int age;
 
@@ -29,19 +30,19 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
 
     // 弹体没有额外同步状态，速度和位置由实体追踪器同步。
     @Override
-    protected void defineSynchedData() {
+    protected void defineSynchedData(net.minecraft.network.syncher.SynchedEntityData.Builder builder) {
     }
 
     // 保持较平直的短程投掷弧线，收招前清理弹体，防止武器重复存在。
     @Override
-    protected float getGravity() {
+    protected double getDefaultGravity() {
         return 0.015F;
     }
 
     @Override
     public void tick() {
         super.tick();
-        if (!level().isClientSide && (++age >= 18 || getOwner() == null || !getOwner().isAlive())) discard();
+        if (!level().isClientSide() && (++age >= 18 || getOwner() == null || !getOwner().isAlive())) discard();
     }
 
     // 排除持有者及友军，避免刚离手就撞到自身模型。
@@ -55,9 +56,9 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
     @Override
     protected void onHitEntity(EntityHitResult result) {
         super.onHitEntity(result);
-        if (!level().isClientSide && getOwner() instanceof LivingEntity owner) {
+        if (!level().isClientSide() && getOwner() instanceof LivingEntity owner) {
             float damage = (float) owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 1.5F;
-            result.getEntity().hurt(damageSources().thrown(this, owner), damage);
+            result.getEntity().hurtOrSimulate(damageSources().thrown(this, owner), damage);
         }
     }
 
@@ -65,7 +66,7 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
     @Override
     protected void onHit(HitResult result) {
         super.onHit(result);
-        if (!level().isClientSide && getOwner() instanceof LivingEntity owner) {
+        if (!level().isClientSide() && getOwner() instanceof LivingEntity owner) {
             // 命中生物时把雷霆落点改为生物脚下；命中方块时保留实际碰撞点。
             Vec3 impact = result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof LivingEntity living
                     ? living.position() : result.getLocation();
@@ -81,7 +82,7 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
                         (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.5F, 0, 4.0D);
             }
         }
-        if (!level().isClientSide) {
+        if (!level().isClientSide()) {
             playSound(SoundEvents.TRIDENT_HIT, 1.0F, 0.8F);
             discard();
         }
@@ -89,15 +90,15 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
 
     // 保存寿命，区块重新加载后仍然按原有剩余时间清理。
     @Override
-    protected void addAdditionalSaveData(CompoundTag tag) {
-        super.addAdditionalSaveData(tag);
-        tag.putInt("FlightAge", age);
+    protected void addAdditionalSaveData(ValueOutput output) {
+        super.addAdditionalSaveData(output);
+        output.putInt("FlightAge", age);
     }
 
     @Override
-    protected void readAdditionalSaveData(CompoundTag tag) {
-        super.readAdditionalSaveData(tag);
-        age = tag.getInt("FlightAge");
+    protected void readAdditionalSaveData(ValueInput input) {
+        super.readAdditionalSaveData(input);
+        age = input.getIntOr("FlightAge", 0);
     }
 
     // 武器形状保持固定，由渲染器按飞行速度旋转。
@@ -110,5 +111,3 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
         return cache;
     }
 }
-
-

@@ -47,6 +47,13 @@ public final class Thunderrelics {
         if (event.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
             event.accept(ModEntities.THUNDER_KING_SPAWN_EGG);
         }
+        if (event.getTabKey() == CreativeModeTabs.COMBAT) {
+            event.accept(ModEntities.ROYAL_GLAIVE);
+            event.accept(ModEntities.ROYAL_HELMET);
+            event.accept(ModEntities.ROYAL_CHESTPLATE);
+            event.accept(ModEntities.ROYAL_LEGGINGS);
+            event.accept(ModEntities.ROYAL_BOOTS);
+        }
     }
 }
 

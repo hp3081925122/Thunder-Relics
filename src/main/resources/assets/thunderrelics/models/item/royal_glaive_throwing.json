@@ -1,127 +1,43 @@
 {
-  "parent": "builtin/entity",
+  "parent": "minecraft:item/generated",
   "textures": {
-    "particle": "thunderrelics:item/royal_glaive"
+    "layer0": "thunderrelics:item/royal_glaive"
   },
   "display": {
     "thirdperson_righthand": {
-      "rotation": [
-        0,
-        90,
-        180
-      ],
-      "translation": [
-        0,
-        -2,
-        2
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ]
+      "rotation": [0, 90, 180],
+      "translation": [0, -2, 2],
+      "scale": [1, 1, 1]
     },
     "thirdperson_lefthand": {
-      "rotation": [
-        0,
-        90,
-        180
-      ],
-      "translation": [
-        0,
-        -2,
-        2
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ]
+      "rotation": [0, 90, 180],
+      "translation": [0, -2, 2],
+      "scale": [1, 1, 1]
     },
     "firstperson_righthand": {
-      "rotation": [
-        0,
-        -90,
-        25
-      ],
-      "translation": [
-        5,
-        -3.600794,
-        1.779285
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ]
+      "rotation": [0, -90, 25],
+      "translation": [5, -3.600794, 1.779285],
+      "scale": [1, 1, 1]
     },
     "firstperson_lefthand": {
-      "rotation": [
-        0,
-        90,
-        -25
-      ],
-      "translation": [
-        5,
-        -3.600794,
-        1.779285
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ]
+      "rotation": [0, 90, -25],
+      "translation": [5, -3.600794, 1.779285],
+      "scale": [1, 1, 1]
     },
     "gui": {
-      "rotation": [
-        0,
-        0,
-        35
-      ],
-      "translation": [
-        1,
-        -1,
-        0
-      ],
-      "scale": [
-        0.22,
-        0.22,
-        0.22
-      ]
+      "rotation": [0, 0, 35],
+      "translation": [1, -1, 0],
+      "scale": [0.22, 0.22, 0.22]
     },
     "ground": {
-      "rotation": [
-        0,
-        0,
-        90
-      ],
-      "translation": [
-        0,
-        3,
-        0
-      ],
-      "scale": [
-        0.3,
-        0.3,
-        0.3
-      ]
+      "rotation": [0, 0, 90],
+      "translation": [0, 3, 0],
+      "scale": [0.3, 0.3, 0.3]
     },
     "fixed": {
-      "rotation": [
-        0,
-        180,
-        35
-      ],
-      "translation": [
-        0,
-        -1,
-        0
-      ],
-      "scale": [
-        0.24,
-        0.24,
-        0.24
-      ]
+      "rotation": [0, 180, 35],
+      "translation": [0, -1, 0],
+      "scale": [0.24, 0.24, 0.24]
     }
   }
 }

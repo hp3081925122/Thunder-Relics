@@ -9,11 +9,11 @@ import com.geckolib.renderer.base.GeoRenderState;
 // GeckoLib 5 模型资源指向当前雷霆君王的几何、贴图和动画文件。
 public final class ThunderKingModel extends GeoModel<ThunderKingEntity> {
     private static final Identifier MODEL = Identifier.fromNamespaceAndPath(Thunderrelics.MOD_ID,
-            "geo/thunder_king_armed.geo.json");
+            "thunder_king_armed");
     private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath(Thunderrelics.MOD_ID,
             "textures/entity/thunder_king_armed.png");
     private static final Identifier ANIMATION = Identifier.fromNamespaceAndPath(Thunderrelics.MOD_ID,
-            "animations/thunder_king.animation.json");
+            "thunder_king");
 
     // 几何与贴图资源通过新版渲染状态读取，动画资源仍由实体本身提供。
     @Override

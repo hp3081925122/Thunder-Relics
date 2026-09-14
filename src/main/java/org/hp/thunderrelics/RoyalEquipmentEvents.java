@@ -16,7 +16,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
-import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import com.mojang.logging.LogUtils;
 import org.hp.thunderrelics.effect.DecorativeLightning;
@@ -26,27 +26,29 @@ import org.hp.thunderrelics.effect.DecorativeLightning;
 public final class RoyalEquipmentEvents {
     private static final String CROWN_TRIGGERED_KEY = "thunderrelics_crown_triggered";
     private static final Map<UUID, Long> CHEST_COOLDOWN = new ConcurrentHashMap<>();
+    private static final Map<UUID, UUID> PENDING_CHEST_RETALIATIONS = new ConcurrentHashMap<>();
 
     // 目标真正切换到戴王冠的玩家时，每个敌对实体只触发一次装饰雷霆。
     @SubscribeEvent
     public static void onTargetChange(LivingChangeTargetEvent event) {
-        if (event.getEntity().level().isClientSide || !(event.getEntity() instanceof Mob mob)
+        if (event.getEntity().level().isClientSide() || !(event.getEntity() instanceof Mob mob)
                 || !(mob instanceof Monster) || !(event.getNewAboutToBeSetTarget() instanceof Player player)
                 || mob.getTarget() == player || !hasItem(player, EquipmentSlot.HEAD, ModEntities.ROYAL_HELMET.get())
-                || mob.isAlliedTo(player) || mob.getPersistentData().getBoolean(CROWN_TRIGGERED_KEY)) return;
+                || mob.isAlliedTo(player) || mob.getPersistentData().getBooleanOr(CROWN_TRIGGERED_KEY, false)) return;
         // 在结算前记录标记，防止同一实体重复切换目标时再次触发。
         mob.getPersistentData().putBoolean(CROWN_TRIGGERED_KEY, true);
         // 敌方生物是索敌事件的发起者，雷霆固定落在敌方生物脚下并由它承受反击。
         Vec3 enemyPosition = mob.position();
         DecorativeLightning.strike(player.level(), enemyPosition, player, mob, 10.0F, 10);
         LogUtils.getLogger().debug("Royal crown retaliation: enemy={}, enemyPos={}, player={}",
-                mob.getType().builtInRegistryHolder().key().location(), enemyPosition, player.getUUID());
+                mob.getType().builtInRegistryHolder().key().identifier(), enemyPosition, player.getUUID());
     }
 
-    // 戴胸甲的玩家受伤后按每秒一次冷却概率反击攻击来源。
+    // 戴胸甲的玩家完成受伤结算后按每秒一次冷却概率反击攻击来源。
     @SubscribeEvent
-    public static void onHurt(LivingIncomingDamageEvent event) {
-        if (event.getEntity().level().isClientSide || !(event.getEntity() instanceof Player player)
+    public static void onHurt(LivingDamageEvent.Post event) {
+        if (event.getEntity().level().isClientSide() || !(event.getEntity() instanceof Player player)
+                || !player.isAlive()
                 || !hasItem(player, EquipmentSlot.CHEST, ModEntities.ROYAL_CHESTPLATE.get())) return;
         Entity attacker = event.getSource().getEntity();
         if (!(attacker instanceof LivingEntity enemy) || enemy == player || player.isAlliedTo(enemy)) return;
@@ -54,21 +56,31 @@ public final class RoyalEquipmentEvents {
         long ready = CHEST_COOLDOWN.getOrDefault(player.getUUID(), Long.MIN_VALUE);
         if (now < ready || player.getRandom().nextFloat() >= 0.30F) return;
         CHEST_COOLDOWN.put(player.getUUID(), now + 20L);
-        // 反击雷霆固定落在攻击者脚下，避免闪电漂浮到身体上方。
-        DecorativeLightning.strike(player.level(), enemy.position(), player, enemy, 3.0F, 3);
+        // 伤害事件仍在原实体结算链中，先排队到下一次实体 tick，避免嵌套伤害导致 26.1.2 崩溃。
+        PENDING_CHEST_RETALIATIONS.put(player.getUUID(), enemy.getUUID());
+        LogUtils.getLogger().debug("Royal chest retaliation queued: player={}, attacker={}",
+                player.getUUID(), enemy.getUUID());
     }
 
     // 护腿在雨中或水中刷新生命恢复 I 与力量 II，靴子刷新速度 II。
     @SubscribeEvent
     public static void onLivingTick(EntityTickEvent.Post event) {
-        if (!(event.getEntity() instanceof Player player) || player.level().isClientSide) return;
+        if (!(event.getEntity() instanceof Player player) || player.level().isClientSide()) return;
+        UUID attackerId = PENDING_CHEST_RETALIATIONS.remove(player.getUUID());
+        if (attackerId != null && player.level().getEntity(attackerId) instanceof LivingEntity enemy && enemy.isAlive()
+                && player.isAlive() && !player.isAlliedTo(enemy)) {
+            // 反击雷霆固定落在攻击者脚下，避免闪电漂浮到身体上方。
+            DecorativeLightning.strike(player.level(), enemy.position(), player, enemy, 3.0F, 3);
+            LogUtils.getLogger().debug("Royal chest retaliation applied: player={}, attacker={}",
+                    player.getUUID(), enemy.getUUID());
+        }
         if (hasItem(player, EquipmentSlot.LEGS, ModEntities.ROYAL_LEGGINGS.get())
                 && (player.level().isRainingAt(player.blockPosition()) || player.isInWater())) {
             player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 40, 0, true, false, true));
-            player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 40, 1, true, false, true));
+            player.addEffect(new MobEffectInstance(MobEffects.STRENGTH, 40, 1, true, false, true));
         }
         if (hasItem(player, EquipmentSlot.FEET, ModEntities.ROYAL_BOOTS.get())) {
-            player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 40, 1, true, false, true));
+            player.addEffect(new MobEffectInstance(MobEffects.SPEED, 40, 1, true, false, true));
         }
         if (CHEST_COOLDOWN.size() > 256 && player.tickCount % 200 == 0) {
             CHEST_COOLDOWN.entrySet().removeIf(entry -> entry.getValue() < player.level().getGameTime());

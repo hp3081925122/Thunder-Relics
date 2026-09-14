@@ -59,22 +59,11 @@ neoForge {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
-// 旧版特效与装备实现依赖 1.20.1 API，先保存在源码中并从本分支编译集排除，后续逐项迁移。
+// 仍有部分旧版客户端渲染与结构辅助类依赖旧 API，先保存在源码中并从本分支编译集排除，后续逐项迁移。
 sourceSets.main.java {
-    exclude 'org/hp/thunderrelics/RoyalEquipmentEvents.java'
     exclude 'org/hp/thunderrelics/client/RoyalCourtDebug.java'
-    exclude 'org/hp/thunderrelics/client/RoyalEquipmentModel.java'
-    exclude 'org/hp/thunderrelics/client/RoyalGlaiveRenderer.java'
     exclude 'org/hp/thunderrelics/client/RoyalSlashDebug.java'
     exclude 'org/hp/thunderrelics/client/RoyalSlashRenderer.java'
-    exclude 'org/hp/thunderrelics/client/RoyalStormRenderer.java'
-    exclude 'org/hp/thunderrelics/client/ThrownRoyalWeaponRenderer.java'
-    exclude 'org/hp/thunderrelics/client/ThunderBossOverlay.java'
-    exclude 'org/hp/thunderrelics/entity/RoyalStormWave.java'
-    exclude 'org/hp/thunderrelics/entity/ThrownRoyalWeapon.java'
-    exclude 'org/hp/thunderrelics/effect/DecorativeLightning.java'
-    exclude 'org/hp/thunderrelics/item/RoyalArmorItem.java'
-    exclude 'org/hp/thunderrelics/item/RoyalGlaiveItem.java'
     exclude 'org/hp/thunderrelics/world/ThunderCourtBuilder.java'
 }
 
