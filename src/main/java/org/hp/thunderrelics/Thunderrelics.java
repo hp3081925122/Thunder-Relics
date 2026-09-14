@@ -3,13 +3,12 @@ package org.hp.thunderrelics;
 import net.minecraft.world.entity.SpawnPlacementTypes;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.item.CreativeModeTabs;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 
 // 雷霆遗迹 26.1.2 NeoForge 入口，公共注册只依赖当前版本 API。
@@ -21,12 +20,15 @@ public final class Thunderrelics {
         // 注册实体和物品，NeoForge 会在注册阶段绑定资源键。
         ModEntities.ENTITIES.register(modEventBus);
         ModEntities.ITEMS.register(modEventBus);
+        ModCreativeTabs.register(modEventBus);
         modEventBus.addListener(this::registerAttributes);
         modEventBus.addListener(this::registerSpawnPlacements);
-        modEventBus.addListener(this::addSpawnEggToTab);
         // 仅在客户端注册渲染事件，服务器不会解析客户端渲染类。
         if (FMLEnvironment.getDist().isClient()) {
             modEventBus.addListener(org.hp.thunderrelics.client.ClientEvents::registerRenderers);
+            // 客户端事件只注册在客户端，服务器不会加载相机和渲染类。
+            NeoForge.EVENT_BUS.addListener(org.hp.thunderrelics.client.ThunderCameraShake::onClientTick);
+            NeoForge.EVENT_BUS.addListener(org.hp.thunderrelics.client.ThunderCameraShake::onCameraAngles);
         }
     }
 
@@ -42,19 +44,6 @@ public final class Thunderrelics {
                 RegisterSpawnPlacementsEvent.Operation.REPLACE);
     }
 
-    // 将刷怪蛋加入原版刷怪蛋创造栏。
-    private void addSpawnEggToTab(BuildCreativeModeTabContentsEvent event) {
-        if (event.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
-            event.accept(ModEntities.THUNDER_KING_SPAWN_EGG);
-        }
-        if (event.getTabKey() == CreativeModeTabs.COMBAT) {
-            event.accept(ModEntities.ROYAL_GLAIVE);
-            event.accept(ModEntities.ROYAL_HELMET);
-            event.accept(ModEntities.ROYAL_CHESTPLATE);
-            event.accept(ModEntities.ROYAL_LEGGINGS);
-            event.accept(ModEntities.ROYAL_BOOTS);
-        }
-    }
 }
 
 

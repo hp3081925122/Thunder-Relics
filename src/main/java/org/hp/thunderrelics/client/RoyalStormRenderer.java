@@ -51,7 +51,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave, Roy
             int index = 0;
             for (Vec3 p : state.points) {
 
-                // 外环交代实际危险范围，内圈不断收束，四条短辐条强化落点识别。
+                // 警示圈在落雷前持续收缩，落雷阶段增加多道雷束。
                 if (age < RoyalStormWave.WARNING_TICKS) {
                     double progress = age / RoyalStormWave.WARNING_TICKS, radius = 2.3 * (1 - progress) + .18;
                     ring(vertices, matrix, p, 1.55, .075, .12F, .45F, 1, .9F);
@@ -67,9 +67,16 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave, Roy
                     Random random = new Random(87123L + state.id * 1009L + index * 977L);
                     if (t < 7) {
                         float alpha = (float) Math.max(0, 1 - t / 7);
-                        // 落雷主体使用三层锥形电束，端点收束后不会像一根等粗塑料管。
-                        Vec3 sky = p.add((random.nextDouble() - .5) * 2.5, 33.6, (random.nextDouble() - .5) * 2.5);
-                        lightningPath(vertices, matrix, sky, p, random, 12, .20D, alpha, .95D);
+                        // 每个落点同时生成三道从不同天空位置汇聚的电束，形成多雷束落地效果。
+                        for (int beam = 0; beam < 3; beam++) {
+                            double angle = beam * Math.PI * 2.0D / 3.0D + random.nextDouble() * .35D;
+                            double skyRadius = .8D + random.nextDouble() * 1.4D;
+                            Vec3 sky = p.add(Math.cos(angle) * skyRadius, 33.6D + random.nextDouble() * 2.0D,
+                                    Math.sin(angle) * skyRadius);
+                            Vec3 end = p.add((random.nextDouble() - .5D) * .35D, .05D,
+                                    (random.nextDouble() - .5D) * .35D);
+                            lightningPath(vertices, matrix, sky, end, random, 12, .20D, alpha, .95D);
+                        }
                         // 贴图粒子中的瞬时闪白改为纯代码星芒，命中时只出现极短一闪。
                         if (t < 3.5D)
                             flashBurst(vertices, matrix, p.add(0, .12, 0), random, 1.15D,
