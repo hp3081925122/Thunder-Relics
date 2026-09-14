@@ -1,59 +1,31 @@
 package org.hp.thunderrelics;
 
-import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.SpawnEggItem;
-import net.neoforged.neoforge.common.DeferredSpawnEggItem;
 import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
-import org.hp.thunderrelics.entity.RoyalStormWave;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
-import org.hp.thunderrelics.entity.ThrownRoyalWeapon;
-import org.hp.thunderrelics.item.RoyalArmorItem;
-import org.hp.thunderrelics.item.RoyalGlaiveItem;
 
-// 集中注册雷霆君王实体、弹体、装备和刷怪蛋，使用 NeoForge 1.21.1 延迟注册器。
+// 集中注册 26.1.2 NeoForge 版本的雷霆君王与刷怪蛋。
 public final class ModEntities {
-    public static final DeferredRegister<EntityType<?>> ENTITIES =
-            DeferredRegister.create(Registries.ENTITY_TYPE, Thunderrelics.MOD_ID);
-    public static final DeferredRegister<Item> ITEMS =
-            DeferredRegister.create(Registries.ITEM, Thunderrelics.MOD_ID);
+    // 新版注册器由注册表键自动推导资源标识符，不再使用旧版 ForgeRegistries。
+    public static final DeferredRegister.Entities ENTITIES = DeferredRegister.createEntities(Thunderrelics.MOD_ID);
+    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(Thunderrelics.MOD_ID);
 
-    // 碰撞体覆盖主体躯干，武器和动作伸展部分不改变基础碰撞箱。
-    public static final DeferredHolder<EntityType<?>, EntityType<ThunderKingEntity>> THUNDER_KING = ENTITIES.register("thunder_king",
-            () -> EntityType.Builder.of(ThunderKingEntity::new, MobCategory.MONSTER)
-                    .sized(1.25F, 3.15F).clientTrackingRange(10).updateInterval(3)
-                    .build(Thunderrelics.MOD_ID + ":thunder_king"));
+    // 主体碰撞箱覆盖躯干，保持与原模型比例一致。
+    public static final DeferredHolder<EntityType<?>, EntityType<ThunderKingEntity>> THUNDER_KING =
+            ENTITIES.registerEntityType("thunder_king", ThunderKingEntity::new, MobCategory.MONSTER,
+                    builder -> builder.sized(1.25F, 3.15F).clientTrackingRange(10).updateInterval(3));
 
-    // 独立投掷弹体每刻同步，避免快速飞行时出现明显位置跳跃。
-    public static final DeferredHolder<EntityType<?>, EntityType<ThrownRoyalWeapon>> THROWN_ROYAL_WEAPON = ENTITIES.register("thrown_royal_weapon",
-            () -> EntityType.Builder.of(ThrownRoyalWeapon::new, MobCategory.MISC)
-                    .sized(0.5F, 0.5F).clientTrackingRange(10).updateInterval(1)
-                    .build(Thunderrelics.MOD_ID + ":thrown_royal_weapon"));
-
-    // 风暴余波实体只携带短时序号，渲染器负责绘制预警、落雷和余波电弧。
-    public static final DeferredHolder<EntityType<?>, EntityType<RoyalStormWave>> ROYAL_STORM_WAVE = ENTITIES.register("royal_storm_wave",
-            () -> EntityType.Builder.of(RoyalStormWave::new, MobCategory.MISC).sized(.1F, .1F)
-                    .clientTrackingRange(12).updateInterval(20).build(Thunderrelics.MOD_ID + ":royal_storm_wave"));
-
-    // 使用 NeoForge 延迟刷怪蛋，确保实体注册完成后再解析实体类型。
-    public static final DeferredHolder<Item, SpawnEggItem> THUNDER_KING_SPAWN_EGG = ITEMS.register("thunder_king_spawn_egg",
-            () -> new DeferredSpawnEggItem(THUNDER_KING::get, 0x27364A, 0xC8A85B, new Item.Properties()));
-
-    // 战利品装备分别注册，便于后续独立配置掉落与合成。
-    public static final DeferredHolder<Item, RoyalArmorItem> ROYAL_HELMET = ITEMS.register("royal_helmet",
-            () -> new RoyalArmorItem(ArmorItem.Type.HELMET));
-    public static final DeferredHolder<Item, RoyalArmorItem> ROYAL_CHESTPLATE = ITEMS.register("royal_chestplate",
-            () -> new RoyalArmorItem(ArmorItem.Type.CHESTPLATE));
-    public static final DeferredHolder<Item, RoyalArmorItem> ROYAL_LEGGINGS = ITEMS.register("royal_leggings",
-            () -> new RoyalArmorItem(ArmorItem.Type.LEGGINGS));
-    public static final DeferredHolder<Item, RoyalArmorItem> ROYAL_BOOTS = ITEMS.register("royal_boots",
-            () -> new RoyalArmorItem(ArmorItem.Type.BOOTS));
-    public static final DeferredHolder<Item, RoyalGlaiveItem> ROYAL_GLAIVE = ITEMS.register("royal_glaive", RoyalGlaiveItem::new);
+    // 26.1.2 使用数据组件声明刷怪蛋对应实体类型。
+    public static final DeferredItem<SpawnEggItem> THUNDER_KING_SPAWN_EGG = ITEMS.registerItem("thunder_king_spawn_egg",
+            properties -> new SpawnEggItem(properties.spawnEgg(THUNDER_KING.get())));
 
     private ModEntities() {
     }
 }
+
+

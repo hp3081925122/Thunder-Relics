@@ -59,10 +59,30 @@ neoForge {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// 26.1.2 暂未提供 GeckoLib 兼容构件，旧版特效与装备实现先保存在源码中并从本分支编译集排除。
+sourceSets.main.java {
+    exclude 'org/hp/thunderrelics/RoyalEquipmentEvents.java'
+    exclude 'org/hp/thunderrelics/client/RoyalCourtDebug.java'
+    exclude 'org/hp/thunderrelics/client/RoyalEquipmentModel.java'
+    exclude 'org/hp/thunderrelics/client/RoyalGlaiveRenderer.java'
+    exclude 'org/hp/thunderrelics/client/RoyalSlashDebug.java'
+    exclude 'org/hp/thunderrelics/client/RoyalSlashRenderer.java'
+    exclude 'org/hp/thunderrelics/client/RoyalStormRenderer.java'
+    exclude 'org/hp/thunderrelics/client/ThrownRoyalWeaponRenderer.java'
+    exclude 'org/hp/thunderrelics/client/ThunderBossOverlay.java'
+    exclude 'org/hp/thunderrelics/client/ThunderKingModel.java'
+    exclude 'org/hp/thunderrelics/entity/RoyalStormWave.java'
+    exclude 'org/hp/thunderrelics/entity/ThrownRoyalWeapon.java'
+    exclude 'org/hp/thunderrelics/effect/DecorativeLightning.java'
+    exclude 'org/hp/thunderrelics/item/RoyalArmorItem.java'
+    exclude 'org/hp/thunderrelics/item/RoyalGlaiveItem.java'
+    exclude 'org/hp/thunderrelics/world/ThunderCourtBuilder.java'
+}
+
 dependencies {
     implementation "net.neoforged:neoforge:${project.neo_version}"
     // GeckoLib 4.9.2 提供 26.1.2 NeoForge 的骨骼动画运行时。
-    implementation "curse.maven:geckolib-388172:8350073"
+    // 26.1.2 当前没有可确认的 GeckoLib 构件，待官方发布兼容版本后再恢复依赖。
 }
 
 tasks.withType(ProcessResources).configureEach {
@@ -103,5 +123,7 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = 'UTF-8'
 }
+
+
 
 

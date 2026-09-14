@@ -1,60 +1,55 @@
 package org.hp.thunderrelics;
 
-import net.minecraft.world.entity.SpawnPlacements;
-import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.SpawnPlacementTypes;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.item.CreativeModeTabs;
-import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 
-// 模组入口负责注册内容、配置和 NeoForge 模组事件监听器。
+// 雷霆遗迹 26.1.2 NeoForge 入口，公共注册只依赖当前版本 API。
 @Mod(Thunderrelics.MOD_ID)
 public final class Thunderrelics {
     public static final String MOD_ID = "thunderrelics";
 
-    public Thunderrelics(IEventBus modEventBus, ModContainer modContainer) {
-        // 将实体和物品注册到当前 NeoForge 模组事件总线。
+    public Thunderrelics(IEventBus modEventBus) {
+        // 注册实体和物品，NeoForge 会在注册阶段绑定资源键。
         ModEntities.ENTITIES.register(modEventBus);
         ModEntities.ITEMS.register(modEventBus);
-        // 注册通用配置，让服务器和单人世界都能读取 Boss 属性。
-        modContainer.registerConfig(ModConfig.Type.COMMON, ThunderrelicsConfig.SPEC);
         modEventBus.addListener(this::registerAttributes);
         modEventBus.addListener(this::registerSpawnPlacements);
         modEventBus.addListener(this::addSpawnEggToTab);
+        // 仅在客户端注册渲染事件，服务器不会解析客户端渲染类。
+        if (FMLEnvironment.getDist().isClient()) {
+            modEventBus.addListener(org.hp.thunderrelics.client.ClientEvents::registerRenderers);
+        }
     }
 
-    // 为雷霆君王提供生命、攻击和移动属性。
+    // 为雷霆君王注册生命、攻击和移动属性。
     private void registerAttributes(EntityAttributeCreationEvent event) {
         event.put(ModEntities.THUNDER_KING.get(), ThunderKingEntity.createAttributes().build());
     }
 
-    // 允许实体参与原版地面怪物刷怪检查，实际刷怪仍由世界规则决定。
+    // 使用 26.1.2 的 SpawnPlacementType 与实体生成原因签名。
     private void registerSpawnPlacements(RegisterSpawnPlacementsEvent event) {
-        event.register(ModEntities.THUNDER_KING.get(),
-                SpawnPlacements.Type.ON_GROUND,
-                net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                Monster::checkMonsterSpawnRules,
+        event.register(ModEntities.THUNDER_KING.get(), SpawnPlacementTypes.ON_GROUND,
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Monster::checkMonsterSpawnRules,
                 RegisterSpawnPlacementsEvent.Operation.REPLACE);
     }
 
-    // 将刷怪蛋、装备和王戟放入原版创造栏，便于测试迁移后的注册内容。
+    // 将刷怪蛋加入原版刷怪蛋创造栏。
     private void addSpawnEggToTab(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
             event.accept(ModEntities.THUNDER_KING_SPAWN_EGG);
         }
-        if (event.getTabKey() == CreativeModeTabs.COMBAT) {
-            event.accept(ModEntities.ROYAL_HELMET);
-            event.accept(ModEntities.ROYAL_CHESTPLATE);
-            event.accept(ModEntities.ROYAL_LEGGINGS);
-            event.accept(ModEntities.ROYAL_BOOTS);
-            event.accept(ModEntities.ROYAL_GLAIVE);
-        }
     }
 }
+
+
+
+
