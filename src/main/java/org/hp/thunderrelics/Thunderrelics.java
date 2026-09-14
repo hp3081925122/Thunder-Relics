@@ -5,11 +5,11 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraft.world.entity.EntityType;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.event.entity.SpawnPlacementRegisterEvent;
-import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
-import net.minecraft.world.item.CreativeModeTabs;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.loading.FMLLoader;
 
 @Mod(Thunderrelics.MOD_ID)
 public final class Thunderrelics {
@@ -22,9 +22,14 @@ public final class Thunderrelics {
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ThunderrelicsConfig.SPEC);
         ModEntities.ENTITIES.register(bus);
         ModEntities.ITEMS.register(bus);
+        ModCreativeTabs.register(bus);
         bus.addListener(this::registerAttributes);
         bus.addListener(this::registerSpawnPlacements);
-        bus.addListener(this::addSpawnEggToTab);
+        if (FMLLoader.getDist().isClient()) {
+            // 客户端事件只注册在客户端，服务器不会加载相机和渲染类。
+            MinecraftForge.EVENT_BUS.addListener(org.hp.thunderrelics.client.ThunderCameraShake::onClientTick);
+            MinecraftForge.EVENT_BUS.addListener(org.hp.thunderrelics.client.ThunderCameraShake::onCameraAngles);
+        }
     }
 
     // 为雷霆君王提供生命、攻击和移动属性。
@@ -41,18 +46,4 @@ public final class Thunderrelics {
                 SpawnPlacementRegisterEvent.Operation.REPLACE);
     }
 
-    // 将刷怪蛋放入原版刷怪蛋创造栏。
-    private void addSpawnEggToTab(BuildCreativeModeTabContentsEvent event) {
-        if (event.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
-            event.accept(ModEntities.THUNDER_KING_SPAWN_EGG);
-        }
-        // 在战斗创造栏提供完整套装和王戟，便于逐件穿戴测试。
-        if (event.getTabKey() == CreativeModeTabs.COMBAT) {
-            event.accept(ModEntities.ROYAL_HELMET);
-            event.accept(ModEntities.ROYAL_CHESTPLATE);
-            event.accept(ModEntities.ROYAL_LEGGINGS);
-            event.accept(ModEntities.ROYAL_BOOTS);
-            event.accept(ModEntities.ROYAL_GLAIVE);
-        }
-    }
 }

@@ -5,7 +5,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.phys.Vec3;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 import org.joml.Matrix4f;
@@ -29,20 +28,6 @@ public final class RoyalSlashRenderer {
     }
 
     private record Sample(double time, Vec3 outer, Vec3 inner, int stroke) {}
-
-    // 使用原版发光着色器，自定义双面和只写颜色状态，避免透明刀光挡住后续渲染。
-    private static final class SlashMaterial extends RenderType {
-        private static final RenderType TYPE = create("thunderrelics_royal_slash", DefaultVertexFormat.POSITION_COLOR,
-                VertexFormat.Mode.QUADS, 4096, false, true, CompositeState.builder()
-                        .setShaderState(RENDERTYPE_LIGHTNING_SHADER).setTransparencyState(LIGHTNING_TRANSPARENCY)
-                        .setCullState(NO_CULL).setWriteMaskState(COLOR_WRITE).setOutputState(MAIN_TARGET)
-                        .createCompositeState(false));
-
-        private SlashMaterial() {
-            super("thunderrelics_royal_slash_base", DefaultVertexFormat.POSITION_COLOR,
-                    VertexFormat.Mode.QUADS, 4096, false, true, () -> {}, () -> {});
-        }
-    }
 
     // 横斩形成宽弧，连斩形成双层细弧，重劈形成更宽且稍长的纵向残光。
     public void render(ThunderKingEntity entity, GeoModel<ThunderKingEntity> model, Matrix4f bladeTransform, PoseStack pose,
@@ -91,7 +76,7 @@ public final class RoyalSlashRenderer {
             trail.lastSample = now;
         }
         if (trail.samples.size() < 2) return;
-        VertexConsumer vertices = buffers.getBuffer(SlashMaterial.TYPE);
+        VertexConsumer vertices = buffers.getBuffer(ThunderLightningMaterial.TYPE);
         Matrix4f matrix = pose.last().pose();
         // 三层连续色阶：窄白芯、青蓝过渡、透明蓝尾，旧轨迹逐段消散。
         for (int i = 1; i < trail.samples.size(); i++) {

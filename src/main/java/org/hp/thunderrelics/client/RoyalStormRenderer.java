@@ -15,13 +15,6 @@ import java.util.Random;
 
 // 蓝色符环、立体落雷和地面电弧都直接绘制网格，使用固定种子保持连续形状。
 public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
-    private static final class Material extends RenderType {
-        static final RenderType TYPE = create("royal_storm", DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS,
-                65536, false, true, CompositeState.builder().setShaderState(RENDERTYPE_LIGHTNING_SHADER)
-                .setTransparencyState(LIGHTNING_TRANSPARENCY).setCullState(NO_CULL).setWriteMaskState(COLOR_WRITE)
-                .setOutputState(MAIN_TARGET).createCompositeState(false));
-        Material() { super("royal_storm_base", DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 65536, false, true, () -> {}, () -> {}); }
-    }
     public RoyalStormRenderer(EntityRendererProvider.Context context) { super(context); }
     @Override
     public ResourceLocation getTextureLocation(RoyalStormWave entity) { return new ResourceLocation("minecraft", "textures/misc/white.png"); }
@@ -33,7 +26,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
     public void render(RoyalStormWave wave, float yaw, float partialTick, PoseStack pose, MultiBufferSource buffers, int light) {
         double age = wave.age(partialTick);
         if (age < 0 || age > RoyalStormWave.LIFE_TICKS) return;
-        VertexConsumer vertices = buffers.getBuffer(Material.TYPE);
+        VertexConsumer vertices = buffers.getBuffer(ThunderLightningMaterial.TYPE);
         Matrix4f matrix = pose.last().pose();
         // 落雷阶段在场地上方增加一层随机电弧，轨迹固定后再随时间淡出，避免画面闪烁。
         if (age >= RoyalStormWave.WARNING_TICKS)
@@ -41,7 +34,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         int index = 0;
         for (Vec3 world : wave.points()) {
             Vec3 p = world.subtract(wave.position());
-            // 外环交代实际危险范围，内圈不断收束，四条短辐条强化落点识别。
+            // 警示圈在落雷前持续收缩，落雷阶段增加多道雷束。
             if (age < RoyalStormWave.WARNING_TICKS) {
                 double progress = age / RoyalStormWave.WARNING_TICKS, radius = 2.3 * (1 - progress) + .18;
                 ring(vertices, matrix, p, 1.55, .075, .12F, .45F, 1, .9F);
@@ -57,9 +50,16 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
                 Random random = new Random(87123L + wave.getId() * 1009L + index * 977L);
                 if (t < 7) {
                     float alpha = (float) Math.max(0, 1 - t / 7);
-                    // 落雷主体使用三层锥形电束，端点收束后不会像一根等粗塑料管。
-                    Vec3 sky = p.add((random.nextDouble() - .5) * 2.5, 33.6, (random.nextDouble() - .5) * 2.5);
-                    lightningPath(vertices, matrix, sky, p, random, 12, .20D, alpha, .95D);
+                    // 每个落点同时生成三道从不同天空位置汇聚的电束，形成多雷束落地效果。
+                    for (int beam = 0; beam < 3; beam++) {
+                        double angle = beam * Math.PI * 2.0D / 3.0D + random.nextDouble() * .35D;
+                        double skyRadius = .8D + random.nextDouble() * 1.4D;
+                        Vec3 sky = p.add(Math.cos(angle) * skyRadius, 33.6D + random.nextDouble() * 2.0D,
+                                Math.sin(angle) * skyRadius);
+                        Vec3 end = p.add((random.nextDouble() - .5D) * .35D, .05D,
+                                (random.nextDouble() - .5D) * .35D);
+                        lightningPath(vertices, matrix, sky, end, random, 12, .20D, alpha, .95D);
+                    }
                     // 贴图粒子中的瞬时闪白改为纯代码星芒，命中时只出现极短一闪。
                     if (t < 3.5D)
                         flashBurst(vertices, matrix, p.add(0, .12, 0), random, 1.15D,
@@ -99,7 +99,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         float alpha = fadeIn * fadeOut * pulse;
         if (alpha <= 0.01F) return;
 
-        VertexConsumer vertices = buffers.getBuffer(Material.TYPE);
+        VertexConsumer vertices = buffers.getBuffer(ThunderLightningMaterial.TYPE);
         Matrix4f matrix = pose.last().pose();
         // weapon_head 的局部 Y 轴长度来自模型武器尖端（约 24 像素），因此端点会随动画精确移动。
         Vector4f transformedTip = weaponTransform.transform(new Vector4f(0.0F, 1.52F, 0.0F, 1.0F));
@@ -149,7 +149,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         if (!entity.isAlive() || weaponTransform == null || entity.getSwingKind() != 3) return;
         double age = entity.level().getGameTime() + partialTick - entity.getSwingStart();
         if (age < 5.0D || age > 23.0D) return;
-        VertexConsumer vertices = buffers.getBuffer(Material.TYPE);
+        VertexConsumer vertices = buffers.getBuffer(ThunderLightningMaterial.TYPE);
         Matrix4f matrix = pose.last().pose();
         float fade = (float) Math.min(1.0D, Math.min((age - 5.0D) / 5.0D, (23.0D - age) / 4.0D));
         // 固定周期内保持路径一致，骨骼变换每帧更新，让电弧随武器运动。
