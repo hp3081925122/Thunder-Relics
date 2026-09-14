@@ -7,9 +7,9 @@ import software.bernie.geckolib.model.GeoModel;
 
 // GeckoLib 模型资源与当前雷霆君王几何、贴图和动画文件一一对应。
 public final class ThunderKingModel extends GeoModel<ThunderKingEntity> {
-    private static final ResourceLocation MODEL = new ResourceLocation(Thunderrelics.MOD_ID, "geo/thunder_king_armed.geo.json");
-    private static final ResourceLocation TEXTURE = new ResourceLocation(Thunderrelics.MOD_ID, "textures/entity/thunder_king_armed.png");
-    private static final ResourceLocation ANIMATION = new ResourceLocation(Thunderrelics.MOD_ID, "animations/thunder_king.animation.json");
+    private static final ResourceLocation MODEL = ResourceLocation.fromNamespaceAndPath(Thunderrelics.MOD_ID, "geo/thunder_king_armed.geo.json");
+    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(Thunderrelics.MOD_ID, "textures/entity/thunder_king_armed.png");
+    private static final ResourceLocation ANIMATION = ResourceLocation.fromNamespaceAndPath(Thunderrelics.MOD_ID, "animations/thunder_king.animation.json");
 
     @Override
     public ResourceLocation getModelResource(ThunderKingEntity entity) {
@@ -26,3 +26,6 @@ public final class ThunderKingModel extends GeoModel<ThunderKingEntity> {
         return ANIMATION;
     }
 }
+
+
+

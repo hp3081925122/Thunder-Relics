@@ -14,8 +14,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.hp.thunderrelics.effect.DecorativeLightning;
 import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 // 复用原版弹体扫掠碰撞，飞行中不追踪目标、不破坏方块。
@@ -29,12 +29,12 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
 
     // 弹体没有额外同步状态，速度和位置由实体追踪器同步。
     @Override
-    protected void defineSynchedData() {
+    protected void defineSynchedData(net.minecraft.network.syncher.SynchedEntityData.Builder builder) {
     }
 
     // 保持较平直的短程投掷弧线，收招前清理弹体，防止武器重复存在。
     @Override
-    protected float getGravity() {
+    protected double getDefaultGravity() {
         return 0.015F;
     }
 
@@ -110,3 +110,6 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoE
         return cache;
     }
 }
+
+
+

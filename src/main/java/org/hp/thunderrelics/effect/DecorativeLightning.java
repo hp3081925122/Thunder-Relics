@@ -28,7 +28,7 @@ public final class DecorativeLightning {
         }
         if (target != null && target.isAlive()) {
             target.hurt(level.damageSources().lightningBolt(), damage);
-            if (fireSeconds > 0) target.setSecondsOnFire(fireSeconds);
+            if (fireSeconds > 0) target.setRemainingFireTicks(Math.max(target.getRemainingFireTicks(), fireSeconds * 20));
         }
     }
 
@@ -43,7 +43,10 @@ public final class DecorativeLightning {
                         && (source == null || !source.isAlliedTo(entity)));
         for (LivingEntity target : targets) {
             target.hurt(level.damageSources().lightningBolt(), damage);
-            if (fireSeconds > 0) target.setSecondsOnFire(fireSeconds);
+            if (fireSeconds > 0) target.setRemainingFireTicks(Math.max(target.getRemainingFireTicks(), fireSeconds * 20));
         }
     }
 }
+
+
+

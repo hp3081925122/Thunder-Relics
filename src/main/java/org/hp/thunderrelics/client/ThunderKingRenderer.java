@@ -6,7 +6,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 import software.bernie.geckolib.cache.object.GeoBone;
-import software.bernie.geckolib.util.RenderUtils;
+import software.bernie.geckolib.util.RenderUtil;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.RenderType;
 import org.joml.Matrix4f;
@@ -41,18 +41,18 @@ public final class ThunderKingRenderer extends GeoEntityRenderer<ThunderKingEnti
     @Override
     public void renderRecursively(PoseStack pose, ThunderKingEntity entity, GeoBone bone, RenderType type,
                                   MultiBufferSource buffers, VertexConsumer vertices, boolean reRender, float partialTick,
-                                  int light, int overlay, float red, float green, float blue, float alpha) {
+                                  int light, int overlay, int renderColor) {
         if (!reRender && bone.getName().equals("weapon_head")) {
             pose.pushPose();
-            RenderUtils.translateMatrixToBone(pose, bone);
-            RenderUtils.translateToPivotPoint(pose, bone);
-            RenderUtils.rotateMatrixAroundBone(pose, bone);
-            RenderUtils.scaleMatrixForBone(pose, bone);
+            RenderUtil.translateMatrixToBone(pose, bone);
+            RenderUtil.translateToPivotPoint(pose, bone);
+            RenderUtil.rotateMatrixAroundBone(pose, bone);
+            RenderUtil.scaleMatrixForBone(pose, bone);
             bladeTransform = new Matrix4f(renderOriginInverse).mul(pose.last().pose());
             pose.popPose();
         }
         super.renderRecursively(pose, entity, bone, type, buffers, vertices, reRender, partialTick,
-                light, overlay, red, green, blue, alpha);
+                light, overlay, renderColor);
     }
 
     // 挥砍时扩大剔除范围，避免主体离开画面边缘时刀光突然消失。
@@ -66,3 +66,6 @@ public final class ThunderKingRenderer extends GeoEntityRenderer<ThunderKingEnti
                 && frustum.isVisible(entity.getBoundingBox().inflate(4)));
     }
 }
+
+
+

@@ -118,7 +118,7 @@ public final class RoyalStormWave extends Entity {
     }
 
     @Override
-    protected void defineSynchedData() { entityData.define(DATA, new CompoundTag()); }
+    protected void defineSynchedData(SynchedEntityData.Builder builder) { builder.define(DATA, new CompoundTag()); }
 
     // 渲染缓存只在同步数据变化时重建，避免每帧反复解码所有落点。
     public List<Vec3> points() {
@@ -167,13 +167,16 @@ public final class RoyalStormWave extends Entity {
                             bolt?"bolt":"arc",victim.getUUID(),applied,before,victim.getHealth(),point);
                 }
             }
-            playSound(bolt ? SoundEvents.LIGHTNING_BOLT_THUNDER : SoundEvents.TRIDENT_THUNDER, bolt ? 2.2F : .8F, bolt ? 1.15F : 1.5F);
+            if (bolt) playSound(SoundEvents.LIGHTNING_BOLT_THUNDER, 2.2F, 1.15F);
+            else playSound(SoundEvents.TRIDENT_THUNDER.value(), .8F, 1.5F);
         }
     }
 
     // 标准生成包配合同步字段传输预警数据；存档恢复沿用原始时刻，不重新落雷。
     @Override
-    public Packet<ClientGamePacketListener> getAddEntityPacket() { return new ClientboundAddEntityPacket(this); }
+    public Packet<ClientGamePacketListener> getAddEntityPacket(net.minecraft.server.level.ServerEntity serverEntity) {
+        return new ClientboundAddEntityPacket(this, serverEntity);
+    }
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
         tag.put("Wave", entityData.get(DATA));
@@ -187,3 +190,6 @@ public final class RoyalStormWave extends Entity {
         attackDamage = tag.getFloat("Damage");
     }
 }
+
+
+

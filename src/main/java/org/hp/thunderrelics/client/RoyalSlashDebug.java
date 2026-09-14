@@ -9,13 +9,15 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.loading.FMLEnvironment;
 import org.hp.thunderrelics.ModEntities;
 import org.hp.thunderrelics.Thunderrelics;
+import org.hp.thunderrelics.entity.ThrownRoyalWeapon;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 import org.joml.Vector4f;
 import org.joml.Matrix4f;
@@ -31,7 +33,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 // 仅在开发客户端显式开启；用本地文件调度，不监听网络，也不注入鼠标键盘事件。
-@Mod.EventBusSubscriber(modid = Thunderrelics.MOD_ID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = Thunderrelics.MOD_ID, value = Dist.CLIENT)
 public final class RoyalSlashDebug {
     public static final boolean ENABLED = !FMLEnvironment.production && Boolean.getBoolean("thunderrelics.debug");
     private static final Path ROOT = Path.of("royal-debug");
@@ -61,8 +63,8 @@ public final class RoyalSlashDebug {
 
     // 每两百毫秒读取一个明确命令，结果写回状态文件；普通客户端不访问调试目录。
     @SubscribeEvent
-    public static void tick(TickEvent.ClientTickEvent event) {
-        if (!ENABLED || event.phase != TickEvent.Phase.END) return;
+    public static void tick(ClientTickEvent.Post event) {
+        if (!ENABLED) return;
         Minecraft mc = Minecraft.getInstance();
         // 调试客户端失去焦点时仍保持客户端刻运行，文件桥才能在终端操作期间继续响应。
         mc.options.pauseOnLostFocus = false;
@@ -88,12 +90,14 @@ public final class RoyalSlashDebug {
                     if (!world.matches("royal-slash-debug-[a-zA-Z0-9_-]+"))
                         throw new IllegalStateException("Only a debug world may be opened");
                     // 开发客户端可能自动恢复上次单人世界，先走正常保存断开流程再切到测试副本。
-                    if (mc.level != null) mc.clearLevel(new TitleScreen());
+                    if (mc.level != null) mc.disconnect(new TitleScreen());
                     testWorld = true;
-                    mc.createWorldOpenFlows().loadLevel(new TitleScreen(), world);
+                    mc.createWorldOpenFlows().openWorld(world, () -> { });
                     status("opening", world);
                 }
                 case "run" -> run(mc, json);
+                // 在专用调试世界中生成一枚低速投掷王戟，便于检查戟头朝向与飞行轴是否一致。
+                case "throw_preview" -> throwPreview(mc);
                 // 王庭框架、内饰和技能实机检查共用受限的测试副本入口。
                 case "court_frame", "court_detail", "court_export", "court_view", "court_storm", "court_prepare", "court_cast", "court_place" -> RoyalCourtDebug.execute(mc, json);
                 case "snapshot" -> {
@@ -185,6 +189,24 @@ public final class RoyalSlashDebug {
         status("running", label);
     }
 
+    // 只在专用调试世界中生成预览投掷物，不改变正式战斗逻辑或玩家存档。
+    private static void throwPreview(Minecraft mc) {
+        if (!testWorld || mc.level == null || mc.getSingleplayerServer() == null || bossId == null)
+            throw new IllegalStateException("A debug world must be loaded first");
+        mc.getSingleplayerServer().execute(() -> {
+            var server = mc.getSingleplayerServer();
+            var level = server.overworld();
+            if (!(level.getEntity(bossId) instanceof ThunderKingEntity boss)) return;
+            Vec3 start = boss.position().add(0.0D, 1.7D, 0.0D);
+            ThrownRoyalWeapon weapon = new ThrownRoyalWeapon(ModEntities.THROWN_ROYAL_WEAPON.get(), level);
+            weapon.setOwner(boss);
+            weapon.setPos(start.x, start.y, start.z);
+            weapon.shoot(0.0D, 0.0D, 1.0D, 0.6F, 0.0F);
+            level.addFreshEntity(weapon);
+        });
+        status("throw_spawned", "Preview projectile spawned");
+    }
+
     // 同时记录两种坐标换算结果，能区分骨骼变换偏差与仅由拖尾寿命造成的残留。
     public static void trace(ThunderKingEntity boss, GeoBone bone, Matrix4f actual, double age, boolean active, Vec3 position, int samples) {
         if (!ENABLED || captureFolder == null || !boss.getUUID().equals(bossId)) return;
@@ -198,15 +220,15 @@ public final class RoyalSlashDebug {
 
     // 在一帧绘制完成后读取真正的游戏帧缓冲，每半个游戏刻采集一次，覆盖全套动作。
     @SubscribeEvent
-    public static void rendered(TickEvent.RenderTickEvent event) {
-        if (!ENABLED || event.phase != TickEvent.Phase.END || captureFolder == null || warmup != 0) return;
+    public static void rendered(RenderFrameEvent.Post event) {
+        if (!ENABLED || captureFolder == null || warmup != 0) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || bossId == null) return;
         ThunderKingEntity boss = null;
         for (var entity : mc.level.entitiesForRendering())
             if (entity.getUUID().equals(bossId) && entity instanceof ThunderKingEntity found) { boss = found; break; }
         if (boss == null || boss.getSwingStart() < 0) return;
-        double age = mc.level.getGameTime() + event.renderTickTime - boss.getSwingStart();
+        double age = mc.level.getGameTime() + event.getPartialTick().getGameTimeDeltaPartialTick(true) - boss.getSwingStart();
         // 调试采集窗口跟随加速后的近战动画，额外保留少量余辉观察时间。
         int end = kind == 0 ? 34 : kind == 1 ? 46 : kind == 2 ? 42 : 46;
         if (age > end) {
@@ -251,3 +273,6 @@ public final class RoyalSlashDebug {
         } catch (Exception error) { LogUtils.getLogger().error("Royal slash status write failed", error); }
     }
 }
+
+
+

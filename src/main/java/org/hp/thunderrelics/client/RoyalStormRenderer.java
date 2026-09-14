@@ -24,7 +24,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
     }
     public RoyalStormRenderer(EntityRendererProvider.Context context) { super(context); }
     @Override
-    public ResourceLocation getTextureLocation(RoyalStormWave entity) { return new ResourceLocation("minecraft", "textures/misc/white.png"); }
+    public ResourceLocation getTextureLocation(RoyalStormWave entity) { return ResourceLocation.fromNamespaceAndPath("minecraft", "textures/misc/white.png"); }
     // 波次实体在场地中央，但边缘落点也需要渲染，因此用场地距离判断。
     @Override
     public boolean shouldRender(RoyalStormWave entity, Frustum frustum, double x, double y, double z) { return entity.distanceToSqr(x, y, z) < 160 * 160; }
@@ -41,7 +41,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         int index = 0;
         for (Vec3 world : wave.points()) {
             Vec3 p = world.subtract(wave.position());
-            // 外环交代实际危险范围，内圈不断收束，四条短辐条强化落点识别。
+            // 警示圈在落雷前持续收缩，落雷阶段增加多道雷束。
             if (age < RoyalStormWave.WARNING_TICKS) {
                 double progress = age / RoyalStormWave.WARNING_TICKS, radius = 2.3 * (1 - progress) + .18;
                 ring(vertices, matrix, p, 1.55, .075, .12F, .45F, 1, .9F);
@@ -57,9 +57,16 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
                 Random random = new Random(87123L + wave.getId() * 1009L + index * 977L);
                 if (t < 7) {
                     float alpha = (float) Math.max(0, 1 - t / 7);
-                    // 落雷主体使用三层锥形电束，端点收束后不会像一根等粗塑料管。
-                    Vec3 sky = p.add((random.nextDouble() - .5) * 2.5, 33.6, (random.nextDouble() - .5) * 2.5);
-                    lightningPath(vertices, matrix, sky, p, random, 12, .20D, alpha, .95D);
+                        // 每个落点同时生成三道从不同天空位置汇聚的电束，形成多雷束落地效果。
+                        for (int beam = 0; beam < 3; beam++) {
+                            double angle = beam * Math.PI * 2.0D / 3.0D + random.nextDouble() * .35D;
+                            double skyRadius = .8D + random.nextDouble() * 1.4D;
+                            Vec3 sky = p.add(Math.cos(angle) * skyRadius, 33.6D + random.nextDouble() * 2.0D,
+                                    Math.sin(angle) * skyRadius);
+                            Vec3 end = p.add((random.nextDouble() - .5D) * .35D, .05D,
+                                    (random.nextDouble() - .5D) * .35D);
+                            lightningPath(vertices, matrix, sky, end, random, 12, .20D, alpha, .95D);
+                        }
                     // 贴图粒子中的瞬时闪白改为纯代码星芒，命中时只出现极短一闪。
                     if (t < 3.5D)
                         flashBurst(vertices, matrix, p.add(0, .12, 0), random, 1.15D,
@@ -202,10 +209,10 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
             double a = i * Math.PI / 24, b = (i + 1) * Math.PI / 24;
             // 直接提交四个顶点，避免多波预警时每帧创建上万个临时数组。
             double ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);
-            v.vertex(m,(float)(p.x+ca*r),(float)p.y,(float)(p.z+sa*r)).color(red,green,blue,alpha).endVertex();
-            v.vertex(m,(float)(p.x+cb*r),(float)p.y,(float)(p.z+sb*r)).color(red,green,blue,alpha).endVertex();
-            v.vertex(m,(float)(p.x+cb*(r+width)),(float)p.y,(float)(p.z+sb*(r+width))).color(red,green,blue,alpha).endVertex();
-            v.vertex(m,(float)(p.x+ca*(r+width)),(float)p.y,(float)(p.z+sa*(r+width))).color(red,green,blue,alpha).endVertex();
+            v.addVertex(m,(float)(p.x+ca*r),(float)p.y,(float)(p.z+sa*r)).setColor(red,green,blue,alpha);
+            v.addVertex(m,(float)(p.x+cb*r),(float)p.y,(float)(p.z+sb*r)).setColor(red,green,blue,alpha);
+            v.addVertex(m,(float)(p.x+cb*(r+width)),(float)p.y,(float)(p.z+sb*(r+width))).setColor(red,green,blue,alpha);
+            v.addVertex(m,(float)(p.x+ca*(r+width)),(float)p.y,(float)(p.z+sa*(r+width))).setColor(red,green,blue,alpha);
         }
     }
     // 两片互相垂直的四边形使电弧从侧面也能看见。
@@ -216,7 +223,7 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         Vec3 other = axis.cross(side).normalize().scale(width);
         for (Vec3 offset : new Vec3[]{side, other})
             for (Vec3 point : new Vec3[]{a.add(offset), b.add(offset), b.subtract(offset), a.subtract(offset)})
-                v.vertex(m, (float) point.x, (float) point.y, (float) point.z).color(red, green, blue, alpha).endVertex();
+                v.addVertex(m, (float) point.x, (float) point.y, (float) point.z).setColor(red, green, blue, alpha);
     }
 
     // 生成一条受控随机折点、端点收束、分叉和三层亮度的连续电束。
@@ -322,3 +329,6 @@ public final class RoyalStormRenderer extends EntityRenderer<RoyalStormWave> {
         }
     }
 }
+
+
+

@@ -127,8 +127,11 @@ public final class RoyalSlashRenderer {
         float[] alpha = {alphaA, alphaB, alphaB * innerAlpha, alphaA * innerAlpha};
         for (int i = 0; i < 4; i++) {
             Vec3 point = points[i].subtract(origin);
-            vertices.vertex(matrix, (float) point.x, (float) point.y, (float) point.z)
-                    .color(red, green, blue, alpha[i]).endVertex();
+            vertices.addVertex(matrix, (float) point.x, (float) point.y, (float) point.z)
+                    .setColor(red, green, blue, alpha[i]);
         }
     }
 }
+
+
+

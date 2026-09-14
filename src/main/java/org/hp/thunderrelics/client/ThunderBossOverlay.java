@@ -3,18 +3,18 @@ package org.hp.thunderrelics.client;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.CustomizeGuiOverlayEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import org.hp.thunderrelics.Thunderrelics;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 
 // 仅替换雷霆君王对应的血条，原版及其他模组的首领血条继续使用各自样式。
-@Mod.EventBusSubscriber(modid = Thunderrelics.MOD_ID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = Thunderrelics.MOD_ID, value = Dist.CLIENT)
 public final class ThunderBossOverlay {
-    private static final ResourceLocation FRAME_TEXTURE = new ResourceLocation(Thunderrelics.MOD_ID, "textures/gui/thunder_boss.png");
-    private static final ResourceLocation FILL_TEXTURE = new ResourceLocation(Thunderrelics.MOD_ID, "textures/gui/thunder_boss_fill.png");
+    private static final ResourceLocation FRAME_TEXTURE = ResourceLocation.fromNamespaceAndPath(Thunderrelics.MOD_ID, "textures/gui/thunder_boss.png");
+    private static final ResourceLocation FILL_TEXTURE = ResourceLocation.fromNamespaceAndPath(Thunderrelics.MOD_ID, "textures/gui/thunder_boss_fill.png");
     private static final int FRAME_WIDTH = 320;
     private static final int FRAME_HEIGHT = 52;
     private static final int FILL_WIDTH = 230;
@@ -68,3 +68,6 @@ public final class ThunderBossOverlay {
     // 工具类不创建实例。
     private ThunderBossOverlay() {}
 }
+
+
+

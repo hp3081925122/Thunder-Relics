@@ -5,28 +5,27 @@ license="${mod_license}"
 [[mods]]
 modId="${mod_id}"
 version="${mod_version}"
-displayName="\u96f7\u9706\u9057\u8ff9"
+displayName="${mod_name}"
 authors="${mod_authors}"
 description='''${mod_description}'''
 
 [[dependencies.${mod_id}]]
-modId="forge"
-mandatory=true
-versionRange="${forge_version_range}"
+modId="neoforge"
+type="required"
+versionRange="${neo_version_range}"
 ordering="NONE"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="minecraft"
-mandatory=true
+type="required"
 versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
 
-# GeckoLib 提供当前生物使用的 GeoModel 和骨骼动画运行时。
 [[dependencies.${mod_id}]]
 modId="geckolib"
-mandatory=true
-versionRange="[4.8.2,5)"
+type="required"
+versionRange="${geckolib_version_range}"
 ordering="AFTER"
 side="BOTH"

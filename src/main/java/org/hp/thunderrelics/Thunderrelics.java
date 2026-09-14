@@ -1,30 +1,38 @@
 package org.hp.thunderrelics;
 
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraft.world.entity.EntityType;
-import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
-import net.minecraftforge.event.entity.SpawnPlacementRegisterEvent;
-import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
-import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.entity.SpawnPlacementTypes;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.monster.Monster;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
+import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.fml.loading.FMLLoader;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.config.ModConfig;
 
+// 模组入口负责注册内容、配置和 NeoForge 模组事件监听器。
 @Mod(Thunderrelics.MOD_ID)
 public final class Thunderrelics {
     public static final String MOD_ID = "thunderrelics";
 
-    public Thunderrelics(FMLJavaModLoadingContext context) {
-        // 将实体和刷怪蛋注册到 Forge 模组事件总线。
-        var bus = context.getModEventBus();
-        // 注册通用配置，让服务器和单人世界都能从配置文件读取 Boss 属性。
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ThunderrelicsConfig.SPEC);
-        ModEntities.ENTITIES.register(bus);
-        ModEntities.ITEMS.register(bus);
-        bus.addListener(this::registerAttributes);
-        bus.addListener(this::registerSpawnPlacements);
-        bus.addListener(this::addSpawnEggToTab);
+    public Thunderrelics(IEventBus modEventBus, ModContainer modContainer) {
+        // 将实体和物品注册到当前 NeoForge 模组事件总线。
+        ModEntities.ENTITIES.register(modEventBus);
+        ModEntities.ITEMS.register(modEventBus);
+        ModEntities.ARMOR_MATERIALS.register(modEventBus);
+        ModCreativeTabs.register(modEventBus);
+        // 注册通用配置，让服务器和单人世界都能读取 Boss 属性。
+        modContainer.registerConfig(ModConfig.Type.COMMON, ThunderrelicsConfig.SPEC);
+        modEventBus.addListener(this::registerAttributes);
+        modEventBus.addListener(this::registerSpawnPlacements);
+        if (FMLLoader.getDist().isClient()) {
+            // 客户端事件只注册在客户端，服务器不会加载相机和渲染类。
+            NeoForge.EVENT_BUS.addListener(org.hp.thunderrelics.client.ThunderCameraShake::onClientTick);
+            NeoForge.EVENT_BUS.addListener(org.hp.thunderrelics.client.ThunderCameraShake::onCameraAngles);
+        }
     }
 
     // 为雷霆君王提供生命、攻击和移动属性。
@@ -33,26 +41,13 @@ public final class Thunderrelics {
     }
 
     // 允许实体参与原版地面怪物刷怪检查，实际刷怪仍由世界规则决定。
-    private void registerSpawnPlacements(SpawnPlacementRegisterEvent event) {
+    private void registerSpawnPlacements(RegisterSpawnPlacementsEvent event) {
         event.register(ModEntities.THUNDER_KING.get(),
-                net.minecraft.world.entity.SpawnPlacements.Type.ON_GROUND,
+                SpawnPlacementTypes.ON_GROUND,
                 net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                net.minecraft.world.entity.monster.Monster::checkMonsterSpawnRules,
-                SpawnPlacementRegisterEvent.Operation.REPLACE);
+                Monster::checkMonsterSpawnRules,
+                RegisterSpawnPlacementsEvent.Operation.REPLACE);
     }
 
-    // 将刷怪蛋放入原版刷怪蛋创造栏。
-    private void addSpawnEggToTab(BuildCreativeModeTabContentsEvent event) {
-        if (event.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
-            event.accept(ModEntities.THUNDER_KING_SPAWN_EGG);
-        }
-        // 在战斗创造栏提供完整套装和王戟，便于逐件穿戴测试。
-        if (event.getTabKey() == CreativeModeTabs.COMBAT) {
-            event.accept(ModEntities.ROYAL_HELMET);
-            event.accept(ModEntities.ROYAL_CHESTPLATE);
-            event.accept(ModEntities.ROYAL_LEGGINGS);
-            event.accept(ModEntities.ROYAL_BOOTS);
-            event.accept(ModEntities.ROYAL_GLAIVE);
-        }
-    }
 }
+

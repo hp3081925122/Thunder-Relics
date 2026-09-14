@@ -175,7 +175,7 @@ public final class ThunderCourtBuilder {
             CompoundTag entity=entities.getCompound(i).getCompound("nbt");
             if(!entity.hasUUID("UUID") || !entity.getUUID("UUID").equals(boss.getUUID()))entities.remove(i);
         }
-        NbtIo.writeCompressed(saved,output.toFile());
+        NbtIo.writeCompressed(saved,output);
     }
 
     // 所有坐标均相对已确认的结构原点，框架和内饰共享同一放置范围。
@@ -185,3 +185,6 @@ public final class ThunderCourtBuilder {
     }
     private static void set(ServerLevel level,BlockPos origin,int x,int y,int z,BlockState state) { level.setBlock(origin.offset(x,y,z),state,2); }
 }
+
+
+

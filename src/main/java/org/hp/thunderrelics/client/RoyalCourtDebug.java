@@ -45,7 +45,7 @@ public final class RoyalCourtDebug {
                 if(action.equals("court_export"))ThunderCourtBuilder.export(level,ORIGIN,Path.of("../src/main/resources/data/thunderrelics/structures/thunder_court.nbt"));
                 if(action.equals("court_storm") || action.equals("court_prepare")) {
                     // 使用正式技能入口和实体同步链路，测试靶固定于场地中央。
-                    for(var old:level.getEntitiesOfClass(ThunderKingEntity.class,new net.minecraft.world.phys.AABB(ORIGIN,ORIGIN.offset(65,36,73))))old.discard();
+                    for(var old:level.getEntitiesOfClass(ThunderKingEntity.class,new net.minecraft.world.phys.AABB(ORIGIN.getX(), ORIGIN.getY(), ORIGIN.getZ(), ORIGIN.getX()+65, ORIGIN.getY()+36, ORIGIN.getZ()+73)))old.discard();
                     ThunderKingEntity boss=new ThunderKingEntity(ModEntities.THUNDER_KING.get(),level);
                     boss.moveTo(ORIGIN.getX()+32.5,ORIGIN.getY()+5,ORIGIN.getZ()+39.5,180,0);
                     boss.setNoAi(true);boss.setPersistenceRequired();boss.setInvulnerable(true);
@@ -60,16 +60,15 @@ public final class RoyalCourtDebug {
                 }
                 // 等客户端已经收到实体后再触发，避免测试时生成包早于动画跟踪订阅。
                 if(action.equals("court_cast")) {
-                    for(var boss:level.getEntitiesOfClass(ThunderKingEntity.class,new net.minecraft.world.phys.AABB(ORIGIN,ORIGIN.offset(65,36,73))))
+                    for(var boss:level.getEntitiesOfClass(ThunderKingEntity.class,new net.minecraft.world.phys.AABB(ORIGIN.getX(), ORIGIN.getY(), ORIGIN.getZ(), ORIGIN.getX()+65, ORIGIN.getY()+36, ORIGIN.getZ()+73)))
                         if(boss.getTarget()!=null)boss.startStorm(boss.getTarget());
                 }
                 // 从资源包加载最终 NBT 放置到另一块空地，验证发布文件而非内存中的建造结果。
                 if(action.equals("court_place")) {
                     boolean worldgen=json.has("worldgen") && json.get("worldgen").getAsBoolean();
                     String position=worldgen?"560 -60 128":"400 -60 128";
-                    int result=server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
+                    server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
                             "place "+(worldgen?"structure":"template")+" thunderrelics:thunder_court "+position);
-                    if(result==0)throw new IllegalStateException("Final court placement failed");
                 }
                 // 可选相机位置只用于测试副本，默认为入口外部俯视。
                 Vec3 camera=json.has("camera")?new Vec3(json.getAsJsonArray("camera").get(0).getAsDouble(),json.getAsJsonArray("camera").get(1).getAsDouble(),json.getAsJsonArray("camera").get(2).getAsDouble()):new Vec3(327,-24,99);
@@ -91,3 +90,6 @@ public final class RoyalCourtDebug {
         });
     }
 }
+
+
+

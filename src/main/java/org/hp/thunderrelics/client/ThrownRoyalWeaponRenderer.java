@@ -16,26 +16,32 @@ public final class ThrownRoyalWeaponRenderer extends GeoEntityRenderer<ThrownRoy
         super(context, new GeoModel<ThrownRoyalWeapon>() {
             @Override
             public ResourceLocation getModelResource(ThrownRoyalWeapon entity) {
-                return new ResourceLocation(Thunderrelics.MOD_ID, "geo/thunder_thrown_weapon.geo.json");
+                return ResourceLocation.fromNamespaceAndPath(Thunderrelics.MOD_ID, "geo/thunder_thrown_weapon.geo.json");
             }
 
             @Override
             public ResourceLocation getTextureResource(ThrownRoyalWeapon entity) {
-                return new ResourceLocation(Thunderrelics.MOD_ID, "textures/entity/thunder_king_armed.png");
+                return ResourceLocation.fromNamespaceAndPath(Thunderrelics.MOD_ID, "textures/entity/thunder_king_armed.png");
             }
 
             @Override
             public ResourceLocation getAnimationResource(ThrownRoyalWeapon entity) {
-                return new ResourceLocation(Thunderrelics.MOD_ID, "animations/thunder_king.animation.json");
+                return ResourceLocation.fromNamespaceAndPath(Thunderrelics.MOD_ID, "animations/thunder_king.animation.json");
             }
         });
         shadowRadius = 0.2F;
     }
 
-    // 模型戟头沿正 Y 轴，旋转后对齐原版弹体的偏航与仰角。
+    // GeckoLib 4.9.2 的实体渲染实际调用四浮点参数重载；模型戟头沿正 Y 轴，旋转后对齐弹体飞行方向。
     @Override
-    protected void applyRotations(ThrownRoyalWeapon entity, PoseStack pose, float age, float yaw, float partialTick) {
-        pose.mulPose(Axis.YP.rotationDegrees(Mth.lerp(partialTick, entity.yRotO, entity.getYRot())));
-        pose.mulPose(Axis.XP.rotationDegrees(90.0F - Mth.lerp(partialTick, entity.xRotO, entity.getXRot())));
+    protected void applyRotations(ThrownRoyalWeapon entity, PoseStack pose, float age, float yaw,
+                                  float partialTick, float nativeScale) {
+        float interpolatedYaw = Mth.lerp(partialTick, entity.yRotO, entity.getYRot());
+        float interpolatedPitch = Mth.lerp(partialTick, entity.xRotO, entity.getXRot());
+        pose.mulPose(Axis.YP.rotationDegrees(interpolatedYaw));
+        pose.mulPose(Axis.XP.rotationDegrees(90.0F - interpolatedPitch));
     }
 }
+
+
+

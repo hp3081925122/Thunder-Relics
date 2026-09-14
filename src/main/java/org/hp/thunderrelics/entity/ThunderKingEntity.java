@@ -29,11 +29,11 @@ import com.mojang.logging.LogUtils;
 import java.util.Optional;
 import java.util.UUID;
 import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.AnimationController;
-import software.bernie.geckolib.core.animation.AnimatableManager;
-import software.bernie.geckolib.core.animation.RawAnimation;
-import software.bernie.geckolib.core.object.PlayState;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.AnimatableManager;
+import software.bernie.geckolib.animation.RawAnimation;
+import software.bernie.geckolib.animation.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 // 雷霆君王的服务端实体，攻击时触发持械模型的横斩动画并持续面向目标。
@@ -61,6 +61,13 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
     private static final RawAnimation TWO_HANDED_SLAM = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "two_handed_slam");
     // 投标枪动作的脱手与结束时机会按战斗速率缩短。
     private static final RawAnimation JAVELIN_THROW = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "javelin_throw");
+    // 转身动画为一秒点二，服务端用二十四刻锁定导航和技能，和 GeckoLib 的二十帧每秒一致。
+    private static final RawAnimation TURN = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "turn");
+    private static final RawAnimation TURN_LEFT = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "turn_left");
+    private static final int TURN_ATTACK_TYPE = 6;
+    private static final int TURN_DURATION = 24;
+    private static final float TURN_TRIGGER_ANGLE = 50.0F;
+    private static final int TURN_COOLDOWN = 8;
     private int throwCooldown = fasterTicks(40);
     // 引雷再次发动间隔按原值八成，完整举戟仪式仍持续六秒。
     private int stormCooldown = fasterTicks(100);
@@ -70,6 +77,9 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
     private int attackType;
     private int nextAttackType;
     private UUID attackTarget;
+    // 记录转身结束时应对齐的目标方向，目标丢失时仍能完成当前转身。
+    private float turnTargetYaw;
+    private int turnCooldown;
 
     // 将与动画长度对应的游戏刻按统一比例缩短，并至少保留一刻避免零时长攻击。
     private static int fasterTicks(int original) {
@@ -93,11 +103,11 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
 
     // 在实体初始化阶段定义网络同步字段。
     @Override
-    protected void defineSynchedData() {
-        super.defineSynchedData();
-        entityData.define(BOSS_BAR_ID, Optional.empty());
-        entityData.define(SWING_KIND, -1);
-        entityData.define(SWING_START, -1L);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(BOSS_BAR_ID, Optional.empty());
+        builder.define(SWING_KIND, -1);
+        builder.define(SWING_START, -1L);
     }
 
     // 客户端仅使用这些字段控制视觉表现，不参与伤害判定。
@@ -145,11 +155,6 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
                 else super.tick();
             }
 
-            // 长柄武器在三点五格内开始预备，命中帧再重新检查距离。
-            @Override
-            protected double getAttackReachSqr(LivingEntity target) {
-                return 3.5D * 3.5D;
-            }
         });
         goalSelector.addGoal(7, new RandomStrollGoal(this, 0.8D));
         goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 16.0F));
@@ -158,7 +163,7 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
         targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));
     }
 
-    // 目标存在时每刻更新头、身体和实体朝向，避免攻击过程中转身滞后。
+    // 目标存在时每刻更新头、身体和实体朝向；转身窗口交给动画根骨骼平滑完成。
     @Override
     public void tick() {
         super.tick();
@@ -168,14 +173,50 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
             bossEvent.setName(getDisplayName());
             if (throwCooldown > 0) throwCooldown--;
             if (stormCooldown > 0) stormCooldown--;
+            if (turnCooldown > 0) turnCooldown--;
         }
         LivingEntity target = getTarget();
         if (target != null && target.isAlive()) {
-            getLookControl().setLookAt(target, 30.0F, 30.0F);
             float yaw = (float) Math.toDegrees(Math.atan2(-(target.getX() - getX()), target.getZ() - getZ()));
-            setYRot(yaw);
-            setYHeadRot(yaw);
-            setYBodyRot(yaw);
+            boolean turnActive = getSwingKind() == TURN_ATTACK_TYPE
+                    && (level().isClientSide || attackType == TURN_ATTACK_TYPE && attackCounter > 0);
+            // 只有明显偏转且当前没有技能时才进入转身，避免目标小幅移动造成动画抖动。
+            if (!level().isClientSide && !turnActive && attackCounter == 0 && turnCooldown == 0) {
+                float delta = wrapDegrees(yaw - getYRot());
+                if (Math.abs(delta) >= TURN_TRIGGER_ANGLE) {
+                    startTurn(target, yaw, delta);
+                    turnActive = true;
+                }
+            }
+            // 转身期间保留实体原朝向，动画根骨骼负责旋转；其他状态继续实时锁定目标。
+            if (turnActive) {
+                getNavigation().stop();
+            } else {
+                getLookControl().setLookAt(target, 30.0F, 30.0F);
+                setYRot(yaw);
+                setYHeadRot(yaw);
+                setYBodyRot(yaw);
+            }
+        }
+        // 转身单独处理，避免落入近战命中帧、投掷或引雷分支。
+        if (!level().isClientSide && attackType == TURN_ATTACK_TYPE && attackCounter > 0) {
+            int elapsed = TURN_DURATION - attackCounter + 1;
+            getNavigation().stop();
+            if (elapsed >= TURN_DURATION) {
+                LivingEntity turnTarget = getTarget();
+                float finalYaw = turnTarget != null && turnTarget.isAlive() ? targetYaw(turnTarget, this) : turnTargetYaw;
+                setYRot(finalYaw);
+                setYHeadRot(finalYaw);
+                setYBodyRot(finalYaw);
+                attackCounter = 0;
+                attackType = -1;
+                entityData.set(SWING_KIND, -1);
+                entityData.set(SWING_START, -1L);
+                turnCooldown = TURN_COOLDOWN;
+            } else {
+                attackCounter--;
+            }
+            return;
         }
         // 大范围技能优先于投掷，起手时仍持续看向目标。
         if (!level().isClientSide && attackCounter == 0 && stormCooldown == 0 && target != null
@@ -199,11 +240,25 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
             // 引雷仪式保留六秒蓄力，其余攻击使用加速后的动画时长。
             int duration = attackType == 5 ? 120 : attackType == 4 ? fasterTicks(52) : attackType == 3 ? fasterTicks(46) : attackType == 1 ? fasterTicks(47) : attackType == 2 ? fasterTicks(41) : fasterTicks(33);
             int elapsed = duration - attackCounter + 1;
+            // 单次横斩在迈步与后脚跟进阶段推进实体，使用碰撞移动避免穿墙，并保留近身停距。
+            if (attackType == 0 && onGround() && target != null && target.isAlive()
+                    && target.getUUID().equals(attackTarget) && !isAlliedTo(target) && hasLineOfSight(target)) {
+                double phase = (double) elapsed / duration;
+                double speed = phase >= 0.12D && phase <= 0.44D ? 0.14D
+                        : phase >= 0.62D && phase <= 0.9D ? 0.07D : 0.0D;
+                Vec3 toward = target.position().subtract(position()).multiply(1.0D, 0.0D, 1.0D);
+                double distance = toward.length();
+                double stopDistance = (getBbWidth() + target.getBbWidth()) * 0.5D + 0.5D;
+                if (speed > 0.0D && distance > stopDistance) {
+                    move(net.minecraft.world.entity.MoverType.SELF,
+                            toward.scale(Math.min(speed, distance - stopDistance) / distance));
+                }
+            }
             // 双手向上托举完成时改变天气，随后三波分别固定当时目标脚下的位置。
             if (attackType == 5) {
                 if (elapsed == 42 && level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                     serverLevel.setWeatherParameters(0, 6000, true, true);
-                    playSound(SoundEvents.TRIDENT_THUNDER, 2, .65F);
+                    playSound(SoundEvents.TRIDENT_THUNDER.value(), 2, .65F);
                 }
                 if ((elapsed == 44 || elapsed == 64 || elapsed == 84) && target != null && target.isAlive()
                         && target.getUUID().equals(attackTarget)) RoyalStormWave.spawn(this, target);
@@ -227,7 +282,7 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
                 Vec3 aim = target.position().add(0, target.getBbHeight() * 0.55D, 0).subtract(start);
                 weapon.shoot(aim.x, aim.y + aim.horizontalDistance() * 0.04D, aim.z, 1.6F, 0.0F);
                 level().addFreshEntity(weapon);
-                playSound(SoundEvents.TRIDENT_THROW, 1.6F, 0.7F);
+                playSound(SoundEvents.TRIDENT_THROW.value(), 1.6F, 0.7F);
             }
             // 武器恢复可见时给出召回提示，投掷阶段不会触发近战伤害窗口。
             if (attackType == 4 && elapsed == fasterTicks(44)) playSound(SoundEvents.TRIDENT_RETURN, 1.0F, 0.8F);
@@ -254,6 +309,31 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
             }
             attackCounter--;
         }
+    }
+
+    // 计算实体正面指向目标的 Minecraft 偏航角，统一服务端转身和收招对齐逻辑。
+    private static float targetYaw(LivingEntity target, ThunderKingEntity self) {
+        return (float) Math.toDegrees(Math.atan2(-(target.getX() - self.getX()), target.getZ() - self.getZ()));
+    }
+
+    // 保留带符号的最短偏航差，正值和负值分别选择左右转身动画。
+    private static float wrapDegrees(float degrees) {
+        while (degrees > 180.0F) degrees -= 360.0F;
+        while (degrees < -180.0F) degrees += 360.0F;
+        return degrees;
+    }
+
+    // 启动转身并冻结导航；左右动画的选择与最短偏航差保持一致。
+    private void startTurn(LivingEntity target, float yaw, float delta) {
+        attackType = TURN_ATTACK_TYPE;
+        attackCounter = TURN_DURATION;
+        attackTarget = target.getUUID();
+        turnTargetYaw = yaw;
+        entityData.set(SWING_KIND, TURN_ATTACK_TYPE);
+        entityData.set(SWING_START, level().getGameTime());
+        getNavigation().stop();
+        triggerAnim("combat", delta < 0.0F ? "turn" : "turn_left");
+        LogUtils.getLogger().debug("Thunder King turn started: delta={}, targetYaw={}", delta, yaw);
     }
 
     // 原版近战任务只启动动作，取消接触时立即扣血；伤害由上方命中帧统一结算。
@@ -291,7 +371,7 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
 
     // 测试入口沿用正式攻击流程。
     public void debugMelee(int kind, LivingEntity target) {
-        if (net.minecraftforge.fml.loading.FMLEnvironment.production || !Boolean.getBoolean("thunderrelics.debug")
+        if (net.neoforged.fml.loading.FMLEnvironment.production || !Boolean.getBoolean("thunderrelics.debug")
                 || level().isClientSide || !isNoAi() || kind < 0 || kind > 3) return;
         nextAttackType = kind;
         setTarget(target);
@@ -323,6 +403,8 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
                 .triggerableAnim("heavy_slam", HEAVY_SLAM)
                 .triggerableAnim("two_handed_slam", TWO_HANDED_SLAM)
                 .triggerableAnim("javelin_throw", JAVELIN_THROW)
+                .triggerableAnim("turn", TURN)
+                .triggerableAnim("turn_left", TURN_LEFT)
                 .triggerableAnim("storm_ritual", STORM);
         // 仅加速近战和投掷触发动画，引雷仪式继续保持完整六秒蓄力。
         controller.setAnimationSpeedHandler(entity -> {
@@ -342,3 +424,10 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
         return animationCache;
     }
 }
+
+
+
+
+
+
+
