@@ -1,30 +1,33 @@
 package org.hp.thunderrelics.client;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.hp.thunderrelics.Thunderrelics;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
-import software.bernie.geckolib.model.GeoModel;
+import com.geckolib.model.GeoModel;
+import com.geckolib.renderer.base.GeoRenderState;
 
-// GeckoLib 模型资源与当前雷霆君王几何、贴图和动画文件一一对应。
+// GeckoLib 5 模型资源指向当前雷霆君王的几何、贴图和动画文件。
 public final class ThunderKingModel extends GeoModel<ThunderKingEntity> {
-    private static final ResourceLocation MODEL = new ResourceLocation(Thunderrelics.MOD_ID, "geo/thunder_king_armed.geo.json");
-    private static final ResourceLocation TEXTURE = new ResourceLocation(Thunderrelics.MOD_ID, "textures/entity/thunder_king_armed.png");
-    private static final ResourceLocation ANIMATION = new ResourceLocation(Thunderrelics.MOD_ID, "animations/thunder_king.animation.json");
+    private static final Identifier MODEL = Identifier.fromNamespaceAndPath(Thunderrelics.MOD_ID,
+            "geo/thunder_king_armed.geo.json");
+    private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath(Thunderrelics.MOD_ID,
+            "textures/entity/thunder_king_armed.png");
+    private static final Identifier ANIMATION = Identifier.fromNamespaceAndPath(Thunderrelics.MOD_ID,
+            "animations/thunder_king.animation.json");
 
+    // 几何与贴图资源通过新版渲染状态读取，动画资源仍由实体本身提供。
     @Override
-    public ResourceLocation getModelResource(ThunderKingEntity entity) {
+    public Identifier getModelResource(GeoRenderState state) {
         return MODEL;
     }
 
     @Override
-    public ResourceLocation getTextureResource(ThunderKingEntity entity) {
+    public Identifier getTextureResource(GeoRenderState state) {
         return TEXTURE;
     }
 
     @Override
-    public ResourceLocation getAnimationResource(ThunderKingEntity entity) {
+    public Identifier getAnimationResource(ThunderKingEntity entity) {
         return ANIMATION;
     }
 }
-
-

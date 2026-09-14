@@ -14,9 +14,18 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import com.geckolib.animatable.GeoAnimatable;
+import com.geckolib.animatable.instance.AnimatableInstanceCache;
+import com.geckolib.animatable.manager.AnimatableManager;
+import com.geckolib.animation.AnimationController;
+import com.geckolib.animation.RawAnimation;
+import com.geckolib.animation.object.PlayState;
+import com.geckolib.util.GeckoLibUtil;
 
-// 26.1.2 迁移首版保留 Boss 的基础战斗、索敌和朝向行为，动画特效待兼容运行时后接入。
-public final class ThunderKingEntity extends Monster {
+// 26.1.2 迁移首版保留 Boss 的基础战斗、索敌、朝向行为和 GeckoLib 行走控制器。
+public final class ThunderKingEntity extends Monster implements GeoAnimatable {
+    private static final RawAnimation WALK = RawAnimation.begin().thenLoop("animation.thunder_king.walk");
+    private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
     public ThunderKingEntity(EntityType<? extends Monster> type, Level level) {
         super(type, level);
         this.setCustomName(Component.translatable("entity.thunderrelics.thunder_king"));
@@ -65,4 +74,18 @@ public final class ThunderKingEntity extends Monster {
     protected net.minecraft.sounds.SoundEvent getDeathSound() {
         return net.minecraft.sounds.SoundEvents.IRON_GOLEM_DEATH;
     }
+
+    // 注册行走循环和后续攻击触发控制器，保持 Blockbench 动画命名兼容。
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<ThunderKingEntity>("combat", 0,
+                state -> state.isMoving() ? state.setAndContinue(WALK) : PlayState.STOP));
+    }
+
+    // 为每个实体提供独立的 GeckoLib 动画缓存。
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return animationCache;
+    }
 }
+
