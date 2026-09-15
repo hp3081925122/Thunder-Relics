@@ -6,7 +6,7 @@
 - 游戏版本：Minecraft 1.20.1
 - 加载器：Forge
 - 项目名称：Thunder Relics
-- 文件版本：1.0.1
+- 文件版本：1.0.2
 - 简短介绍：Adds the Thunder King boss, animated royal glaive combat, storm rituals, and a full royal armor set for Minecraft 1.20.1 Forge.
 
 ## 项目描述

@@ -3,19 +3,15 @@ package org.hp.thunderrelics.client;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterColorHandlersEvent;
-import net.minecraftforge.client.event.RegisterShadersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.renderer.item.ItemProperties;
-import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.hp.thunderrelics.ModEntities;
 import org.hp.thunderrelics.Thunderrelics;
-import java.io.IOException;
 
 // 客户端事件订阅类只在客户端加载，专用服务器不会解析渲染器。
 @Mod.EventBusSubscriber(modid = Thunderrelics.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
@@ -37,22 +33,6 @@ public final class ClientEvents {
     public static void registerItemColors(RegisterColorHandlersEvent.Item event) {
         event.register((stack, tintIndex) -> -1, ModEntities.THUNDER_KING_SPAWN_EGG.get());
         LOGGER.info("Registered un-tinted Thunder King spawn egg color handler");
-    }
-
-    // 注册 1.20.1 Forge 专用的动态雷电着色器，加载失败时保留原版渲染回退。
-    @SubscribeEvent
-    public static void registerShaders(RegisterShadersEvent event) {
-        try {
-            ShaderInstance shader = new ShaderInstance(event.getResourceProvider(),
-                    new ResourceLocation(Thunderrelics.MOD_ID, "thunder_lightning"),
-                    DefaultVertexFormat.POSITION_COLOR);
-            event.registerShader(shader, loaded -> {
-                ThunderLightningMaterial.setShader(loaded);
-                LOGGER.info("Loaded Thunder Relics lightning shader");
-            });
-        } catch (IOException exception) {
-            LOGGER.error("Failed to load Thunder Relics lightning shader; using vanilla lightning shader", exception);
-        }
     }
 
     @SubscribeEvent
