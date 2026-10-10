@@ -42,7 +42,7 @@ public final class RoyalCourtDebug {
                 player.setGameMode(GameType.SPECTATOR);
                 if(action.equals("court_frame"))ThunderCourtBuilder.frame(level,ORIGIN);
                 if(action.equals("court_detail"))ThunderCourtBuilder.decorate(level,ORIGIN);
-                if(action.equals("court_export"))ThunderCourtBuilder.export(level,ORIGIN,Path.of("../src/main/resources/data/thunderrelics/structures/thunder_court.nbt"));
+                if(action.equals("court_export"))ThunderCourtBuilder.export(level,ORIGIN,Path.of("../src/main/resources/data/thunderrelics/structure/thunder_court.nbt"));
                 if(action.equals("court_storm") || action.equals("court_prepare")) {
                     // 使用正式技能入口和实体同步链路，测试靶固定于场地中央。
                     for(var old:level.getEntitiesOfClass(ThunderKingEntity.class,new net.minecraft.world.phys.AABB(ORIGIN,ORIGIN.offset(65,36,73))))old.discard();
@@ -91,5 +91,6 @@ public final class RoyalCourtDebug {
         });
     }
 }
+
 
 

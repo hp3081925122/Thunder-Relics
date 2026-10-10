@@ -22,6 +22,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.util.Mth;
 import net.minecraft.sounds.SoundEvents;
 import org.hp.thunderrelics.ModEntities;
 import org.hp.thunderrelics.ThunderrelicsConfig;
@@ -51,8 +52,10 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
             ThunderKingEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Long> SWING_START = SynchedEntityData.defineId(
             ThunderKingEntity.class, EntityDataSerializers.LONG);
-    // 行走和攻击共用控制器，攻击触发后优先播放完整攻击动作。
-    private static final RawAnimation WALK = RawAnimation.begin().thenLoop(ANIMATION_PREFIX + "walk");
+    // 行走控制器只驱动腿部，攻击控制器可以同时保持上半身动作。
+    private static final RawAnimation WALK_LEGS = RawAnimation.begin().thenLoop(ANIMATION_PREFIX + "walk_legs");
+    // 站立不动时循环播放待机呼吸。
+    private static final RawAnimation IDLE = RawAnimation.begin().thenLoop(ANIMATION_PREFIX + "idle");
     private final ServerBossEvent bossEvent;
     private static final RawAnimation CLEAVE = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "cleave");
     private static final RawAnimation DOUBLE_CLEAVE = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "double_cleave");
@@ -61,13 +64,10 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
     private static final RawAnimation TWO_HANDED_SLAM = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "two_handed_slam");
     // 投标枪动作的脱手与结束时机会按战斗速率缩短。
     private static final RawAnimation JAVELIN_THROW = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "javelin_throw");
-    // 转身动画为一秒点二，服务端用二十四刻锁定导航和技能，和 GeckoLib 的二十帧每秒一致。
-    private static final RawAnimation TURN = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "turn");
-    private static final RawAnimation TURN_LEFT = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "turn_left");
-    private static final int TURN_ATTACK_TYPE = 6;
-    private static final int TURN_DURATION = 24;
-    private static final float TURN_TRIGGER_ANGLE = 50.0F;
-    private static final int TURN_COOLDOWN = 8;
+    // 每刻最大转向角度，取消转身动画后避免大角度瞬间翻转。
+    private static final float MAX_TURN_PER_TICK = 12.0F;
+    // 行走动画按每秒二点二二格的地面速度制作，播放速率随实际移动速度缩放以防滑步。
+    private static final double WALK_DESIGN_BLOCKS_PER_SECOND = 2.22D;
     private int throwCooldown = fasterTicks(40);
     // 引雷再次发动间隔按原值八成，完整举戟仪式仍持续六秒。
     private int stormCooldown = fasterTicks(100);
@@ -77,9 +77,8 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
     private int attackType;
     private int nextAttackType;
     private UUID attackTarget;
-    // 记录转身结束时应对齐的目标方向，目标丢失时仍能完成当前转身。
-    private float turnTargetYaw;
-    private int turnCooldown;
+    // 仅客户端记录上一帧是否在播放行走，用于输出状态切换调试。
+    private boolean lastWalkState;
 
     // 将与动画长度对应的游戏刻按统一比例缩短，并至少保留一刻避免零时长攻击。
     private static int fasterTicks(int original) {
@@ -181,50 +180,16 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
             bossEvent.setName(getDisplayName());
             if (throwCooldown > 0) throwCooldown--;
             if (stormCooldown > 0) stormCooldown--;
-            if (turnCooldown > 0) turnCooldown--;
         }
         LivingEntity target = getTarget();
         if (target != null && target.isAlive()) {
             float yaw = (float) Math.toDegrees(Math.atan2(-(target.getX() - getX()), target.getZ() - getZ()));
-            boolean turnActive = getSwingKind() == TURN_ATTACK_TYPE
-                    && (level().isClientSide() || attackType == TURN_ATTACK_TYPE && attackCounter > 0);
-            // 只有明显偏转且当前没有技能时才进入转身，避免目标小幅移动造成动画抖动。
-            if (!level().isClientSide() && !turnActive && attackCounter == 0 && turnCooldown == 0) {
-                float delta = wrapDegrees(yaw - getYRot());
-                if (Math.abs(delta) >= TURN_TRIGGER_ANGLE) {
-                    startTurn(target, yaw, delta);
-                    turnActive = true;
-                }
-            }
-            // 转身期间保留实体原朝向，动画根骨骼负责旋转；其他状态继续实时锁定目标。
-            if (turnActive) {
-                getNavigation().stop();
-            } else {
-                getLookControl().setLookAt(target, 30.0F, 30.0F);
-                setYRot(yaw);
-                setYHeadRot(yaw);
-                setYBodyRot(yaw);
-            }
-        }
-        // 转身单独处理，避免落入近战命中帧、投掷或引雷分支。
-        if (!level().isClientSide() && attackType == TURN_ATTACK_TYPE && attackCounter > 0) {
-            int elapsed = TURN_DURATION - attackCounter + 1;
-            getNavigation().stop();
-            if (elapsed >= TURN_DURATION) {
-                LivingEntity turnTarget = getTarget();
-                float finalYaw = turnTarget != null && turnTarget.isAlive() ? targetYaw(turnTarget, this) : turnTargetYaw;
-                setYRot(finalYaw);
-                setYHeadRot(finalYaw);
-                setYBodyRot(finalYaw);
-                attackCounter = 0;
-                attackType = -1;
-                entityData.set(SWING_KIND, -1);
-                entityData.set(SWING_START, -1L);
-                turnCooldown = TURN_COOLDOWN;
-            } else {
-                attackCounter--;
-            }
-            return;
+            // 按每刻上限平滑转向目标，头、身体与实体朝向保持一致。
+            float turned = Mth.approachDegrees(getYRot(), yaw, MAX_TURN_PER_TICK);
+            getLookControl().setLookAt(target, 30.0F, 30.0F);
+            setYRot(turned);
+            setYHeadRot(turned);
+            setYBodyRot(turned);
         }
         // 大范围技能优先于投掷，起手时仍持续看向目标。
         if (!level().isClientSide() && attackCounter == 0 && stormCooldown == 0 && target != null
@@ -324,31 +289,6 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
         }
     }
 
-    // 计算实体正面指向目标的 Minecraft 偏航角，统一服务端转身和收招对齐逻辑。
-    private static float targetYaw(LivingEntity target, ThunderKingEntity self) {
-        return (float) Math.toDegrees(Math.atan2(-(target.getX() - self.getX()), target.getZ() - self.getZ()));
-    }
-
-    // 保留带符号的最短偏航差，正值和负值分别选择左右转身动画。
-    private static float wrapDegrees(float degrees) {
-        while (degrees > 180.0F) degrees -= 360.0F;
-        while (degrees < -180.0F) degrees += 360.0F;
-        return degrees;
-    }
-
-    // 启动转身并冻结导航；左右动画的选择与最短偏航差保持一致。
-    private void startTurn(LivingEntity target, float yaw, float delta) {
-        attackType = TURN_ATTACK_TYPE;
-        attackCounter = TURN_DURATION;
-        attackTarget = target.getUUID();
-        turnTargetYaw = yaw;
-        entityData.set(SWING_KIND, TURN_ATTACK_TYPE);
-        entityData.set(SWING_START, level().getGameTime());
-        getNavigation().stop();
-        triggerAnimation(delta < 0.0F ? "turn" : "turn_left");
-        LogUtils.getLogger().debug("Thunder King turn started: delta={}, targetYaw={}", delta, yaw);
-    }
-
     // 原版近战任务只启动动作，取消接触时立即扣血；伤害由上方命中帧统一结算。
     @Override
     public boolean doHurtTarget(ServerLevel level, net.minecraft.world.entity.Entity target) {
@@ -405,7 +345,7 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
         bossEvent.removePlayer(player);
     }
 
-    // 地面移动播放行走，停下恢复静止；服务端触发的攻击覆盖行走循环。
+    // 攻击控制器维持上半身动作，移动控制器叠加腿部步态。
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         // 起手和收招已写入动画，不额外插入控制器过渡，保证服务端命中时刻一致。
@@ -422,23 +362,39 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
                     // 触发动作由 GeckoLib 网络状态维护，首帧时间线尚未建立时也不能被基础状态覆盖。
                     boolean triggered = state.controller().isPlayingTriggeredAnimation()
                             || state.controller().getCurrentRawAnimation() != null
-                            && !state.isCurrentAnimation(WALK)
+                            && !state.isCurrentAnimation(IDLE)
                             && !state.controller().hasAnimationFinished();
                     if (triggered) return PlayState.CONTINUE;
                     state.controller().stopTriggeredAnimation();
-                    return entity.onGround() && state.isMoving()
-                            ? state.setAndContinue(WALK) : PlayState.STOP;
+                    state.setControllerSpeed(1.0F);
+                    return state.setAndContinue(IDLE);
                 });
         controller.triggerableAnim("cleave", CLEAVE);
         controller.triggerableAnim("double_cleave", DOUBLE_CLEAVE);
         controller.triggerableAnim("heavy_slam", HEAVY_SLAM);
         controller.triggerableAnim("two_handed_slam", TWO_HANDED_SLAM);
         controller.triggerableAnim("javelin_throw", JAVELIN_THROW);
-        controller.triggerableAnim("turn", TURN);
-        controller.triggerableAnim("turn_left", TURN_LEFT);
         controller.triggerableAnim("storm_ritual", STORM);
         controller.receiveTriggeredAnimations();
         controllers.add(controller);
+
+        // 只在下肢播放步态，避免覆盖横斩、重劈和投掷动作的上半身与髋部关键帧。
+        AnimationController<ThunderKingEntity> locomotion = new AnimationController<>("locomotion", 0,
+                state -> {
+                    ThunderKingEntity entity = (ThunderKingEntity) state.animatable();
+                    boolean walking = entity.onGround() && state.isMoving();
+                    if (walking != entity.lastWalkState) {
+                        entity.lastWalkState = walking;
+                        LogUtils.getLogger().debug("Thunder King walk state: walking={}, onGround={}, walkSpeed={}",
+                                walking, entity.onGround(), entity.walkAnimation.speed());
+                    }
+                    if (!walking) return PlayState.STOP;
+                    double blocksPerSecond = entity.walkAnimation.speed() * 5.0D;
+                    state.setControllerSpeed((float) Mth.clamp(
+                            blocksPerSecond / WALK_DESIGN_BLOCKS_PER_SECOND, 0.5D, 1.6D));
+                    return state.setAndContinue(WALK_LEGS);
+                });
+        controllers.add(locomotion);
     }
 
     // GeckoLib 5 通过 GeoEntity 的实体网络通道把服务端动作同步到客户端。
