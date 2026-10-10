@@ -47,5 +47,7 @@ public final class ThrownRoyalWeaponRenderer extends GeoEntityRenderer<ThrownRoy
     protected void applyRotations(RenderPassInfo<ThrownRoyalWeaponRenderState> pass, PoseStack pose, float nativeScale) {
         pose.mulPose(Axis.YP.rotationDegrees(pass.renderState().yaw));
         pose.mulPose(Axis.XP.rotationDegrees(90.0F - pass.renderState().pitch));
+        // 绕杆身翻转九十度，飞行时月牙刃面保持竖直
+        pose.mulPose(Axis.YP.rotationDegrees(90.0F));
     }
 }
