@@ -31,12 +31,20 @@ public final class FxDraw {
         if (Math.abs(axis.y) > 0.9D) probe = new Vec3(1, 0, 0);
         Vec3 side = axis.cross(probe).normalize().scale(width);
         Vec3 other = axis.cross(side).normalize().scale(width);
-        // 两片面各自写入四个顶点。
+        // 闪电管线会剔除背面，每片面都要正反各写一次，四周才都能看见。
         for (Vec3 offset : new Vec3[]{side, other}) {
-            vertex(v, m, a.add(offset), r, g, bl, alpha);
-            vertex(v, m, b.add(offset), r, g, bl, alpha);
-            vertex(v, m, b.subtract(offset), r, g, bl, alpha);
-            vertex(v, m, a.subtract(offset), r, g, bl, alpha);
+            Vec3 a0 = a.add(offset);
+            Vec3 a1 = a.subtract(offset);
+            Vec3 b0 = b.add(offset);
+            Vec3 b1 = b.subtract(offset);
+            vertex(v, m, a0, r, g, bl, alpha);
+            vertex(v, m, b0, r, g, bl, alpha);
+            vertex(v, m, b1, r, g, bl, alpha);
+            vertex(v, m, a1, r, g, bl, alpha);
+            vertex(v, m, a1, r, g, bl, alpha);
+            vertex(v, m, b1, r, g, bl, alpha);
+            vertex(v, m, b0, r, g, bl, alpha);
+            vertex(v, m, a0, r, g, bl, alpha);
         }
     }
 
@@ -202,13 +210,17 @@ public final class FxDraw {
         }
     }
 
-    // 两条采样边之间的光带，用于刀光拖尾；外沿与内沿透明度不同形成软边。
+    // 两条采样边之间的光带，用于刀光拖尾；外沿与内沿透明度不同形成软边。正反各写一次，绕到另一侧也能看见。
     public static void ribbon(VertexConsumer v, Matrix4f m, Vec3 aOuter, Vec3 aInner, Vec3 bOuter, Vec3 bInner,
                               float r, float g, float bl, float alphaA, float alphaB, float innerScale) {
         vertex(v, m, aOuter, r, g, bl, alphaA);
         vertex(v, m, bOuter, r, g, bl, alphaB);
         vertex(v, m, bInner, r, g, bl, alphaB * innerScale);
         vertex(v, m, aInner, r, g, bl, alphaA * innerScale);
+        vertex(v, m, aOuter, r, g, bl, alphaA);
+        vertex(v, m, aInner, r, g, bl, alphaA * innerScale);
+        vertex(v, m, bInner, r, g, bl, alphaB * innerScale);
+        vertex(v, m, bOuter, r, g, bl, alphaB);
     }
 
     // 取与给定方向垂直的随机单位向量。
