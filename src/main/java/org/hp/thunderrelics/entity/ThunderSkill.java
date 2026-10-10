@@ -7,7 +7,8 @@ public enum ThunderSkill {
     TWO_HANDED_SLAM("two_handed_slam", 1.25D, 2.3D, 1.1D),
     JAVELIN("javelin_throw", 1.25D, 2.6D, 1.2D, 2.2D),
     STORM("storm_ritual", 1.0D, 6.0D, 2.1D, 2.2D, 3.2D, 4.2D),
-    RELIC_BARRAGE("relic_barrage", 1.0D, 2.8D, 0.95D, 1.1D, 1.25D, 1.4D);
+    RELIC_BARRAGE("relic_barrage", 1.0D, 2.8D, 0.95D, 1.1D, 1.25D, 1.4D),
+    GROUND_PLANT("ground_plant", 1.0D, 2.6D, 0.7D, 2.1D);
 
     public final String animation;
     public final double speed;

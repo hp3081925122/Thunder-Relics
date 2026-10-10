@@ -21,6 +21,10 @@ import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.ToolMaterial;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.phys.Vec3;
+import org.hp.thunderrelics.entity.ThunderFx;
 import org.hp.thunderrelics.ModEntities;
 import org.hp.thunderrelics.client.RoyalGlaiveRenderer;
 import org.hp.thunderrelics.entity.ThrownRoyalWeapon;
@@ -66,6 +70,30 @@ public final class RoyalGlaiveItem extends Item implements GeoItem {
         player.awardStat(Stats.ITEM_USED.get(this));
         player.getCooldowns().addCooldown(stack, 10);
         return true;
+    }
+
+    // 平砍命中：生成月牙雷光斩痕，并向附近至多两只敌对生物跳出雷链。
+    @Override
+    public void hurtEnemy(ItemStack stack, LivingEntity mob, LivingEntity attacker) {
+        super.hurtEnemy(stack, mob, attacker);
+        if (!(attacker.level() instanceof ServerLevel level)) return;
+        float tilt = 1.0F;
+        if (attacker.tickCount % 2 == 0) tilt = -1.0F;
+        Vec3 chest = mob.position().add(0.0D, mob.getBbHeight() * 0.5D, 0.0D);
+        ThunderFx.playerSlash(level, attacker, chest, tilt);
+        level.playSound(null, mob.getX(), mob.getY(), mob.getZ(), SoundEvents.LIGHTNING_BOLT_IMPACT,
+                SoundSource.PLAYERS, 0.35F, 1.8F);
+        int chained = 0;
+        // 只跳向怪物，避免误伤玩家与宠物。
+        for (LivingEntity other : level.getEntitiesOfClass(LivingEntity.class, mob.getBoundingBox().inflate(5.0D),
+                entity -> entity != mob && entity != attacker && entity.isAlive() && entity instanceof Enemy)) {
+            if (chained >= 2) break;
+            Vec3 otherChest = other.position().add(0.0D, other.getBbHeight() * 0.5D, 0.0D);
+            ThunderFx.chain(level, attacker, chest, otherChest);
+            other.hurtOrSimulate(level.damageSources().indirectMagic(attacker, attacker), 4.0F);
+            chained++;
+        }
+        LOGGER.debug("Royal glaive melee hit: target={}, chained={}", mob.getType(), chained);
     }
 
     // 三叉戟动作提供投掷蓄力和抬臂姿势；新版长矛动作依赖动能武器组件，不适用于王戟。

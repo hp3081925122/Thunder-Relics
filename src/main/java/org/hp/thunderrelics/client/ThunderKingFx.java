@@ -107,7 +107,7 @@ public final class ThunderKingFx {
             Vec3 axis = bones.head.subtract(bones.grip);
             if (axis.length() < 0.5D) return null;
             Vec3 dir = axis.normalize();
-            return new Weapon(bones.grip, bones.head, bones.head.add(dir.scale(TIP_LENGTH)), bones.head.subtract(dir.scale(0.3D)));
+            return new Weapon(bones.grip, bones.head, bones.head.add(dir.scale(TIP_LENGTH)), bones.head.subtract(dir.scale(1.0D)));
         }
     }
 
@@ -210,6 +210,23 @@ public final class ThunderKingFx {
                 float alpha = (float) (1.0D - back / 5.0D);
                 FxDraw.burst(v, m, w.grip(), random, 1.3D, 9, 0.07D, alpha);
                 FxDraw.glowOrb(v, m, cam, w.grip(), 0.55D, alpha);
+            }
+        }
+        if (skill == ThunderSkill.GROUND_PLANT) {
+            if (in(skill, age, 0.1D, 0.72D)) charge(v, m, cam, w, id, now, progress(skill, age, 0.1D, 0.65D), 5);
+            // 插地后戟身持续放电，电弧从刃尖向地面四散。
+            if (in(skill, age, 0.7D, 2.05D)) {
+                float hold = (float) (1.0D - progress(skill, age, 1.7D, 2.05D));
+                Random random = new Random(id * 2287L + (long) Math.floor(now / 2.0D));
+                bladeArcs(v, m, w, random, 4, hold);
+                FxDraw.groundArcs(v, m, w.tip(), random, 2.2D, 5, 0.07D, hold * 0.9F);
+                FxDraw.glowOrb(v, m, cam, w.tip(), 0.5D * (0.85D + 0.15D * Math.sin(now * 1.9D)), hold);
+            }
+            double plant = age - skill.event(0);
+            if (plant >= 0.0D && plant < 6.0D) {
+                float flash = (float) (1.0D - plant / 6.0D);
+                FxDraw.burst(v, m, w.tip(), new Random(id * 6113L), 2.2D, 12, 0.09D, flash);
+                FxDraw.glowOrb(v, m, cam, w.tip(), 1.2D * flash + 0.2D, flash);
             }
         }
         if (skill == ThunderSkill.STORM && in(skill, age, 1.5D, 5.0D)) {

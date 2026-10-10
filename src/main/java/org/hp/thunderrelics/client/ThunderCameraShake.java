@@ -42,6 +42,8 @@ public final class ThunderCameraShake {
             double age = fx.age(0.0F);
             if (fx.kind() == ThunderFx.HIT_BOLT && crossed(fx.getId(), age, 2)) add(0.16F, falloff(distance, 18.0D));
             if (fx.kind() == ThunderFx.SLAM && crossed(fx.getId(), age, 0)) add(0.28F * fx.param(), falloff(distance, 26.0D));
+            if (fx.kind() == ThunderFx.LANE_BOLT && crossed(fx.getId(), age, (int) fx.param() + 2))
+                add(0.12F, falloff(distance, 20.0D));
             if (fx.kind() == ThunderFx.RELIC_BOLT && crossed(fx.getId(), age, ThunderFx.RELIC_STRIKE_TICK))
                 add(0.2F, falloff(distance, 22.0D));
         }

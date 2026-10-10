@@ -33,6 +33,12 @@ public final class ThunderFx extends Entity {
     public static final int HIT_BOLT = 0;
     public static final int SLAM = 1;
     public static final int RELIC_BOLT = 2;
+    // 插地雷轨：参数为落雷延迟刻数，起点为同一路径上一道雷的位置。
+    public static final int LANE_BOLT = 3;
+    // 玩家王戟平砍的月牙斩痕，起点为玩家位置，参数为斩痕倾斜方向。
+    public static final int PLAYER_SLASH = 4;
+    // 雷链：从起点生物跳到落点生物的电弧。
+    public static final int CHAIN = 5;
     // 遗石雷殛从发射到落雷的刻数，期间显示预警圈。
     public static final int RELIC_STRIKE_TICK = 14;
     private static final EntityDataAccessor<Integer> KIND = SynchedEntityData.defineId(ThunderFx.class, EntityDataSerializers.INT);
@@ -87,6 +93,27 @@ public final class ThunderFx extends Entity {
         fx.playSound(SoundEvents.TRIDENT_THUNDER.value(), 1.1F, 1.6F + stone * 0.08F);
     }
 
+    // 插地雷轨的单道雷：先沿地面裂纹蔓延并显示预警，延迟后天雷劈落。
+    public static void laneBolt(ServerLevel level, LivingEntity owner, Vec3 from, Vec3 target, int delay,
+                                float damage, double radius) {
+        ThunderFx fx = create(level, LANE_BOLT, from, target, owner, delay);
+        fx.damage = damage;
+        fx.radius = radius;
+        level.addFreshEntity(fx);
+    }
+
+    // 玩家平砍斩痕，落点为命中目标胸口高度。
+    public static void playerSlash(ServerLevel level, LivingEntity attacker, Vec3 target, float tilt) {
+        ThunderFx fx = create(level, PLAYER_SLASH, attacker.position().add(0, attacker.getBbHeight() * 0.6D, 0), target, attacker, tilt);
+        level.addFreshEntity(fx);
+    }
+
+    // 雷链电弧，只负责画面。
+    public static void chain(ServerLevel level, Entity owner, Vec3 from, Vec3 to) {
+        ThunderFx fx = create(level, CHAIN, from, to, owner, 1.0F);
+        level.addFreshEntity(fx);
+    }
+
     // 向下寻找可站立表面，让落点贴地。
     public static Vec3 floor(Level level, Vec3 at) {
         BlockPos pos = BlockPos.containing(at.x, at.y + 1.0D, at.z);
@@ -124,8 +151,11 @@ public final class ThunderFx extends Entity {
     }
 
     // 各特效的存续刻数。
-    public static int life(int kind) {
+    public static int life(int kind, float param) {
+        if (kind == LANE_BOLT) return (int) param + 18;
         if (kind == SLAM) return 30;
+        if (kind == PLAYER_SLASH) return 11;
+        if (kind == CHAIN) return 9;
         if (kind == RELIC_BOLT) return RELIC_STRIKE_TICK + 26;
         return 18;
     }
@@ -145,20 +175,24 @@ public final class ThunderFx extends Entity {
         super.tick();
         if (level().isClientSide()) return;
         int age = (int) age(0.0F);
-        if (age >= life(kind())) {
+        if (age >= life(kind(), param())) {
             discard();
             return;
         }
-        if (kind() == RELIC_BOLT && age == RELIC_STRIKE_TICK) strikeRelic();
+        if (kind() == RELIC_BOLT && age == RELIC_STRIKE_TICK) strikeArea("relic");
+        if (kind() == LANE_BOLT && age == (int) param()) strikeArea("lane");
     }
 
     // 落雷时对半径内的敌对生物造成伤害并短暂缓慢，同一道雷每个目标只结算一次。
-    private void strikeRelic() {
+    private void strikeArea(String type) {
         ServerLevel level = (ServerLevel) level();
         Entity owner = null;
         if (ownerId != null) owner = level.getEntity(ownerId);
-        playSound(SoundEvents.LIGHTNING_BOLT_THUNDER, 1.8F, 1.4F);
-        playSound(SoundEvents.LIGHTNING_BOLT_IMPACT, 1.5F, 1.0F);
+        // 雷轨数量多，音量减半避免叠加刺耳。
+        float volume = 1.0F;
+        if (kind() == LANE_BOLT) volume = 0.5F;
+        playSound(SoundEvents.LIGHTNING_BOLT_THUNDER, 1.8F * volume, 1.4F);
+        playSound(SoundEvents.LIGHTNING_BOLT_IMPACT, 1.5F * volume, 1.0F);
         if (!(owner instanceof LivingEntity caster) || !caster.isAlive()) return;
         AABB area = new AABB(getX() - radius, getY() - 0.5D, getZ() - radius,
                 getX() + radius, getY() + 3.0D, getZ() + radius);
@@ -176,8 +210,8 @@ public final class ThunderFx extends Entity {
                 hits++;
             }
         }
-        LogUtils.getLogger().debug("Thunder relic bolt strike: stone={}, pos={}, hits={}, damage={}",
-                param(), position(), hits, damage);
+        LogUtils.getLogger().debug("Thunder {} bolt strike: param={}, pos={}, hits={}, damage={}",
+                type, param(), position(), hits, damage);
     }
 
     // 特效实体不可被攻击。

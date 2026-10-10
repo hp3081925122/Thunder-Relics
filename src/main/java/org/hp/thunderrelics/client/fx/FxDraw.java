@@ -42,9 +42,9 @@ public final class FxDraw {
 
     // 三层同轴线段：光晕、过渡与电芯，形成发光电束截面。
     public static void glowSegment(VertexConsumer v, Matrix4f m, Vec3 a, Vec3 b, double width, float alpha) {
-        segment(v, m, a, b, width * 1.7D, HALO[0], HALO[1], HALO[2], alpha * 0.22F);
-        segment(v, m, a, b, width * 0.75D, MID[0], MID[1], MID[2], alpha * 0.6F);
-        segment(v, m, a, b, width * 0.25D, CORE[0], CORE[1], CORE[2], Math.min(1.0F, alpha * 1.1F));
+        segment(v, m, a, b, width * 2.8D, HALO[0], HALO[1], HALO[2], alpha * 0.26F);
+        segment(v, m, a, b, width * 1.1D, MID[0], MID[1], MID[2], alpha * 0.7F);
+        segment(v, m, a, b, width * 0.4D, CORE[0], CORE[1], CORE[2], Math.min(1.0F, alpha * 1.15F));
     }
 
     // 水平圆环，由多段梯形组成，避免粒子间隙。
@@ -67,9 +67,9 @@ public final class FxDraw {
 
     // 发光地面环：内亮外暗的三层环，用于冲击波和预警。
     public static void glowRing(VertexConsumer v, Matrix4f m, Vec3 c, double radius, double width, float alpha) {
-        ring(v, m, c, radius, width * 2.4D, HALO[0], HALO[1], HALO[2], alpha * 0.35F);
-        ring(v, m, c, radius, width, MID[0], MID[1], MID[2], alpha * 0.75F);
-        ring(v, m, c, radius + width * 0.15D, width * 0.3D, CORE[0], CORE[1], CORE[2], alpha);
+        ring(v, m, c, radius, width * 3.2D, HALO[0], HALO[1], HALO[2], alpha * 0.4F);
+        ring(v, m, c, radius, width * 1.4D, MID[0], MID[1], MID[2], alpha * 0.8F);
+        ring(v, m, c, radius + width * 0.15D, width * 0.5D, CORE[0], CORE[1], CORE[2], alpha);
     }
 
     // 水平实心光盘，中心亮边缘透明，用于地面受击亮斑。
@@ -90,9 +90,9 @@ public final class FxDraw {
 
     // 面向相机的径向光晕，三层叠加得到柔和的发光球。
     public static void glowOrb(VertexConsumer v, Matrix4f m, Quaternionf camera, Vec3 c, double radius, float alpha) {
-        billboardDisc(v, m, camera, c, radius * 2.2D, HALO[0], HALO[1], HALO[2], alpha * 0.25F);
-        billboardDisc(v, m, camera, c, radius, MID[0], MID[1], MID[2], alpha * 0.55F);
-        billboardDisc(v, m, camera, c, radius * 0.38D, CORE[0], CORE[1], CORE[2], alpha);
+        billboardDisc(v, m, camera, c, radius * 2.8D, HALO[0], HALO[1], HALO[2], alpha * 0.3F);
+        billboardDisc(v, m, camera, c, radius * 1.3D, MID[0], MID[1], MID[2], alpha * 0.6F);
+        billboardDisc(v, m, camera, c, radius * 0.5D, CORE[0], CORE[1], CORE[2], alpha);
     }
 
     // 相机朝向的扇形光盘，由相机四元数得到屏幕右向与上向。
@@ -139,7 +139,7 @@ public final class FxDraw {
                 point = point.add(drift);
             }
             double shape = Math.sin(Math.PI * (step - 0.5D) / steps);
-            double segmentWidth = width * (0.3D + 0.7D * shape);
+            double segmentWidth = width * 1.35D * (0.3D + 0.7D * shape);
             float segmentAlpha = alpha * (float) (0.4D + 0.6D * shape);
             glowSegment(v, m, previous, point, segmentWidth, segmentAlpha);
             // 分叉概率随进度降低，限制数量控制面片。

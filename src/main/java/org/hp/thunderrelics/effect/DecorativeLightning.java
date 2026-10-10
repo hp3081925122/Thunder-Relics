@@ -10,6 +10,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.server.level.ServerLevel;
+import org.hp.thunderrelics.entity.ThunderFx;
 
 // 装饰雷霆只生成视觉闪电，伤害和着火由本类对指定目标显式结算。
 public final class DecorativeLightning {
@@ -20,12 +22,18 @@ public final class DecorativeLightning {
     public static void strike(Level level, Vec3 position, @Nullable Entity source,
                               @Nullable LivingEntity target, float damage, int fireSeconds) {
         if (level.isClientSide()) return;
-        LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(level, EntitySpawnReason.TRIGGERED);
-        if (bolt != null) {
-            bolt.setVisualOnly(true);
-            Vec3 feet = target == null ? position : target.position();
-            bolt.setPos(feet.x, feet.y, feet.z);
-            level.addFreshEntity(bolt);
+        Vec3 feet = position;
+        if (target != null) feet = target.position();
+        // 有施法者时使用自绘天雷特效，否则退回原版视觉闪电。
+        if (source != null && level instanceof ServerLevel serverLevel) {
+            ThunderFx.hitBolt(serverLevel, source, feet);
+        } else {
+            LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(level, EntitySpawnReason.TRIGGERED);
+            if (bolt != null) {
+                bolt.setVisualOnly(true);
+                bolt.setPos(feet.x, feet.y, feet.z);
+                level.addFreshEntity(bolt);
+            }
         }
         if (target != null && target.isAlive()) {
             target.hurtOrSimulate(level.damageSources().lightningBolt(), damage);

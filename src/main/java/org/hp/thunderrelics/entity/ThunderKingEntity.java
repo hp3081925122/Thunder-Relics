@@ -76,6 +76,7 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
     private int javelinCooldown = 60;
     private int stormCooldown = 160;
     private int relicCooldown = 100;
+    private int plantCooldown = 140;
     private final List<LivingEntity> relicTargets = new ArrayList<>();
     // 仅客户端记录上一帧是否在播放行走，用于输出状态切换调试。
     private boolean lastWalkState;
@@ -173,6 +174,7 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
         if (javelinCooldown > 0) javelinCooldown--;
         if (stormCooldown > 0) stormCooldown--;
         if (relicCooldown > 0) relicCooldown--;
+        if (plantCooldown > 0) plantCooldown--;
         if (skill == null) chooseRangedSkill(target);
         if (skill != null) updateSkill(target);
     }
@@ -203,6 +205,9 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
         if (stormCooldown == 0 && distance <= 26.0D && sight) {
             stormCooldown = 576;
             startSkill(ThunderSkill.STORM, target);
+        } else if (plantCooldown == 0 && distance >= 3.0D && distance <= 15.0D && sight) {
+            plantCooldown = 240;
+            startSkill(ThunderSkill.GROUND_PLANT, target);
         } else if (relicCooldown == 0 && distance >= 4.0D && distance <= 22.0D && sight) {
             relicCooldown = 220;
             startSkill(ThunderSkill.RELIC_BARRAGE, target);
@@ -289,6 +294,8 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
             stormEvent(level, index, target);
         } else if (skill == ThunderSkill.RELIC_BARRAGE) {
             fireRelic(level, index, target, attack);
+        } else if (skill == ThunderSkill.GROUND_PLANT && index == 0) {
+            plantWeapon(level, attack);
         }
     }
 
@@ -393,6 +400,30 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
         Vec3 point = ThunderFx.floor(level, aim);
         ThunderFx.relicBolt(level, this, stone, stonePosition(stone), point, attack * 1.1F, 1.8D);
         LogUtils.getLogger().debug("Thunder King relic fire: stone={}, victim={}, point={}", stone, victim.getUUID(), point);
+    }
+
+    // 王戟插地：插地点冲击，三条路径（正前、左前、右前）由近及远依次落雷。
+    private void plantWeapon(ServerLevel level, float attack) {
+        Vec3 plant = ThunderFx.floor(level, frontPoint(3.0D));
+        ThunderFx.slam(level, this, plant, 0.8F);
+        int hits = areaHit(level, plant, 2.2D, attack * 1.2F, 0.6D, 0.4D);
+        double yaw = Math.toRadians(getYRot());
+        int[] order = {1, 0, 2};
+        double[] angles = {-32.0D, 0.0D, 32.0D};
+        // 每条路径六道雷，相邻间隔二点三格，延迟逐道递增。
+        for (int path = 0; path < 3; path++) {
+            double a = yaw + Math.toRadians(angles[path]);
+            Vec3 dir = new Vec3(-Math.sin(a), 0.0D, Math.cos(a));
+            Vec3 previous = plant;
+            for (int j = 0; j < 6; j++) {
+                Vec3 point = ThunderFx.floor(level, position().add(dir.scale(3.6D + j * 2.3D)).add(0.0D, 1.5D, 0.0D));
+                int delay = 6 + j * 3 + order[path];
+                ThunderFx.laneBolt(level, this, previous, point, delay, attack * 0.9F + 2.0F, 1.7D);
+                previous = point;
+            }
+        }
+        playSound(SoundEvents.ANVIL_LAND, 1.2F, 0.5F);
+        LogUtils.getLogger().debug("Thunder King ground plant: plant={}, hits={}", plant, hits);
     }
 
     // 收集二十四格内的敌人，主目标优先，其余按距离排序。

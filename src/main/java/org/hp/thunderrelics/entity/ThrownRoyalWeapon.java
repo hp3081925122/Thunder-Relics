@@ -13,7 +13,8 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.hp.thunderrelics.effect.DecorativeLightning;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.AABB;
 import com.geckolib.animatable.GeoAnimatable;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
@@ -62,29 +63,44 @@ public final class ThrownRoyalWeapon extends ThrowableProjectile implements GeoA
         }
     }
 
-    // 命中方块或实体后立即结束本次飞行，不穿墙或反复扣血。
+    // 命中方块或实体后立即结束本次飞行，并生成雷霆冲击特效。
     @Override
     protected void onHit(HitResult result) {
         super.onHit(result);
-        if (!level().isClientSide() && getOwner() instanceof LivingEntity owner) {
-            // 命中生物时把雷霆落点改为生物脚下；命中方块时保留实际碰撞点。
-            Vec3 impact = result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof LivingEntity living
-                    ? living.position() : result.getLocation();
-            LivingEntity hitLiving = result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof LivingEntity living
-                    ? living : null;
+        if (!(level() instanceof ServerLevel level)) return;
+        if (getOwner() instanceof LivingEntity owner) {
+            Vec3 impact = result.getLocation();
+            LivingEntity hitLiving = null;
+            if (result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof LivingEntity living) {
+                hitLiving = living;
+                impact = living.position();
+            }
+            Vec3 ground = ThunderFx.floor(level, impact.add(0.0D, 0.5D, 0.0D));
             if (result.getType() == HitResult.Type.BLOCK) {
-                // 命中方块后生成半径八格的圆圈预警，随后由预警实体统一落雷和结算伤害。
+                // 命中方块：冲击波加半径八格的预警落雷。
+                ThunderFx.slam(level, owner, ground, 0.8F);
                 RoyalStormWave.spawnImpactArea(owner, impact, 8.0D,
                         (float) owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.5F);
-            } else if (owner instanceof Player player) {
-                // 玩家投掷命中生物时保留原有装饰雷霆范围伤害，并排除直击目标避免重复结算。
-                DecorativeLightning.strikeArea(level(), impact, player, hitLiving,
-                        (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.5F, 0, 4.0D);
+            } else {
+                // 命中生物：天降雷柱与小型冲击波；玩家投掷再对周围造成范围雷伤。
+                ThunderFx.hitBolt(level, owner, ground);
+                ThunderFx.slam(level, owner, ground, 0.7F);
+                if (owner instanceof Player player) splash(level, player, ground, hitLiving,
+                        (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.5F, 4.0D);
             }
         }
-        if (!level().isClientSide()) {
-            playSound(SoundEvents.TRIDENT_HIT, 1.0F, 0.8F);
-            discard();
+        playSound(SoundEvents.TRIDENT_HIT, 1.0F, 0.8F);
+        discard();
+    }
+
+    // 玩家投戟命中后的范围雷伤，排除投掷者、直击目标与友军。
+    private static void splash(ServerLevel level, Player player, Vec3 center, LivingEntity excluded,
+                               float damage, double radius) {
+        AABB area = new AABB(center, center).inflate(radius, 2.0D, radius);
+        // 逐个结算范围内的生物。
+        for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area,
+                entity -> entity.isAlive() && entity != player && entity != excluded && !player.isAlliedTo(entity))) {
+            target.hurtOrSimulate(level.damageSources().indirectMagic(player, player), damage);
         }
     }
 
