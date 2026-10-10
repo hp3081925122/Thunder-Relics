@@ -11,6 +11,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 import org.hp.thunderrelics.entity.ThrownRoyalWeapon;
 import org.hp.thunderrelics.entity.RoyalStormWave;
+import org.hp.thunderrelics.entity.ThunderFx;
 import org.hp.thunderrelics.item.RoyalArmorItem;
 import org.hp.thunderrelics.item.RoyalGlaiveItem;
 
@@ -32,6 +33,10 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<RoyalStormWave>> ROYAL_STORM_WAVE =
             ENTITIES.registerEntityType("royal_storm_wave", RoyalStormWave::new, MobCategory.MISC,
                     builder -> builder.sized(0.1F, 0.1F).clientTrackingRange(12).updateInterval(1));
+    // 命中天雷、砸地冲击波与遗石雷殛共用一个轻量特效实体。
+    public static final DeferredHolder<EntityType<?>, EntityType<ThunderFx>> THUNDER_FX =
+            ENTITIES.registerEntityType("thunder_fx", ThunderFx::new, MobCategory.MISC,
+                    builder -> builder.sized(0.1F, 0.1F).clientTrackingRange(10).updateInterval(20).noSave());
 
     // 26.1.2 使用数据组件声明刷怪蛋对应实体类型。
     public static final DeferredItem<SpawnEggItem> THUNDER_KING_SPAWN_EGG = ITEMS.registerItem("thunder_king_spawn_egg",

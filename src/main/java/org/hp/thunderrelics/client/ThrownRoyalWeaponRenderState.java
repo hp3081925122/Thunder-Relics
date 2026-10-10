@@ -11,6 +11,11 @@ public final class ThrownRoyalWeaponRenderState extends EntityRenderState implem
     // 弹体插值后的偏航和仰角。
     public float yaw;
     public float pitch;
+    // 特效所需：实体编号、飞行方向、世界时间与世界坐标。
+    public int entityId;
+    public net.minecraft.world.phys.Vec3 direction = net.minecraft.world.phys.Vec3.ZERO;
+    public double worldTime;
+    public net.minecraft.world.phys.Vec3 worldPos = net.minecraft.world.phys.Vec3.ZERO;
     private final Map<DataTicket<?>, Object> geckolibData = new HashMap<>();
 
     // 覆盖 NeoForge 混入的写入入口，确保 GeckoLib 父类写入的数据与读取使用同一张表。

@@ -13,6 +13,7 @@ public final class ClientEvents {
         event.registerEntityRenderer(ModEntities.THUNDER_KING.get(), ThunderKingRenderer::new);
         event.registerEntityRenderer(ModEntities.THROWN_ROYAL_WEAPON.get(), ThrownRoyalWeaponRenderer::new);
         event.registerEntityRenderer(ModEntities.ROYAL_STORM_WAVE.get(), RoyalStormRenderer::new);
+        event.registerEntityRenderer(ModEntities.THUNDER_FX.get(), ThunderFxRenderer::new);
     }
 
     private ClientEvents() {
