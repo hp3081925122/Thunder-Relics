@@ -12,8 +12,8 @@ import org.hp.thunderrelics.item.RoyalGlaiveItem;
 
 // 王戟使用 GeckoLib 5 的特殊物品渲染器，并在手持视角修正握柄锚点。
 public final class RoyalGlaiveRenderer extends GeoItemRenderer<RoyalGlaiveItem> {
-    // 模型的柄部金箍位于负 Y 方向，手持时需要把该位置对齐到掌心。
-    private static final double GRIP_Y = -8.5D;
+    // 戟的握点在模型原点，刃朝 +Y。手持时把原点放进掌心。
+    private static final double GRIP_Y = 0.0D;
     // 仅在开发调试开关启用时，对每个手持视角记录一次握点变换。
     private static final boolean DEBUG = Boolean.getBoolean("thunderrelics.debug");
     private final EnumSet<ItemDisplayContext> loggedContexts = EnumSet.noneOf(ItemDisplayContext.class);
@@ -36,7 +36,7 @@ public final class RoyalGlaiveRenderer extends GeoItemRenderer<RoyalGlaiveItem> 
         }
 
         PoseStack pose = renderPassInfo.poseStack();
-        // 保留迁移前的模型缩放和握点，使普通持握与投掷蓄力都围绕柄部定位。
+        // 手持沿用 0.55 缩放，普通持握和投掷蓄力都把柄心放在掌心。
         pose.translate(0.5D, 0.5D, 0.5D);
         pose.scale(0.55F, 0.55F, 0.55F);
         pose.translate(0.0D, -GRIP_Y / 16.0D, 0.0D);
