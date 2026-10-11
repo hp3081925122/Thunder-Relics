@@ -9,6 +9,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.server.level.ServerLevel;
+import org.hp.thunderrelics.entity.ThunderFx;
 
 // 装饰雷霆只生成视觉闪电，伤害和着火由本类对指定目标显式结算。
 public final class DecorativeLightning {
@@ -23,8 +25,12 @@ public final class DecorativeLightning {
         if (bolt != null) {
             bolt.setVisualOnly(true);
             Vec3 feet = target == null ? position : target.position();
-            bolt.setPos(feet.x, feet.y, feet.z);
-            level.addFreshEntity(bolt);
+            if (source != null && level instanceof ServerLevel serverLevel) {
+                ThunderFx.hitBolt(serverLevel, source, feet);
+            } else {
+                bolt.setPos(feet.x, feet.y, feet.z);
+                level.addFreshEntity(bolt);
+            }
         }
         if (target != null && target.isAlive()) {
             target.hurt(level.damageSources().lightningBolt(), damage);

@@ -13,10 +13,11 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
-import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import com.mojang.logging.LogUtils;
 import org.hp.thunderrelics.effect.DecorativeLightning;
@@ -26,6 +27,7 @@ import org.hp.thunderrelics.effect.DecorativeLightning;
 public final class RoyalEquipmentEvents {
     private static final String CROWN_TRIGGERED_KEY = "thunderrelics_crown_triggered";
     private static final Map<UUID, Long> CHEST_COOLDOWN = new ConcurrentHashMap<>();
+    private static final Map<UUID, UUID> PENDING_CHEST_RETALIATIONS = new ConcurrentHashMap<>();
 
     // 目标真正切换到戴王冠的玩家时，每个敌对实体只触发一次装饰雷霆。
     @SubscribeEvent
@@ -45,7 +47,7 @@ public final class RoyalEquipmentEvents {
 
     // 戴胸甲的玩家受伤后按每秒一次冷却概率反击攻击来源。
     @SubscribeEvent
-    public static void onHurt(LivingIncomingDamageEvent event) {
+    public static void onHurt(LivingDamageEvent.Post event) {
         if (event.getEntity().level().isClientSide || !(event.getEntity() instanceof Player player)
                 || !hasItem(player, EquipmentSlot.CHEST, ModEntities.ROYAL_CHESTPLATE.get())) return;
         Entity attacker = event.getSource().getEntity();
@@ -54,14 +56,21 @@ public final class RoyalEquipmentEvents {
         long ready = CHEST_COOLDOWN.getOrDefault(player.getUUID(), Long.MIN_VALUE);
         if (now < ready || player.getRandom().nextFloat() >= 0.30F) return;
         CHEST_COOLDOWN.put(player.getUUID(), now + 20L);
-        // 反击雷霆固定落在攻击者脚下，避免闪电漂浮到身体上方。
-        DecorativeLightning.strike(player.level(), enemy.position(), player, enemy, 3.0F, 3);
+        // 伤害事件结束后再触发反击，避免在伤害回调内部嵌套新的伤害链。
+        PENDING_CHEST_RETALIATIONS.put(player.getUUID(), enemy.getUUID());
     }
 
     // 护腿在雨中或水中刷新生命恢复 I 与力量 II，靴子刷新速度 II。
     @SubscribeEvent
     public static void onLivingTick(EntityTickEvent.Post event) {
         if (!(event.getEntity() instanceof Player player) || player.level().isClientSide) return;
+        UUID attackerId = PENDING_CHEST_RETALIATIONS.remove(player.getUUID());
+        if (attackerId != null && player.level() instanceof ServerLevel serverLevel
+                && serverLevel.getEntity(attackerId) instanceof LivingEntity enemy
+                && enemy.isAlive() && player.isAlive() && !player.isAlliedTo(enemy)) {
+            // 反击雷霆固定落在攻击者脚下，避免闪电漂浮到身体上方。
+            DecorativeLightning.strike(player.level(), enemy.position(), player, enemy, 3.0F, 3);
+        }
         if (hasItem(player, EquipmentSlot.LEGS, ModEntities.ROYAL_LEGGINGS.get())
                 && (player.level().isRainingAt(player.blockPosition()) || player.isInWater())) {
             player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 40, 0, true, false, true));

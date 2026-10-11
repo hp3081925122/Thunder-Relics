@@ -14,11 +14,15 @@ import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.stats.Stats;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import org.hp.thunderrelics.ModEntities;
 import org.hp.thunderrelics.entity.ThrownRoyalWeapon;
+import org.hp.thunderrelics.entity.ThunderFx;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import org.hp.thunderrelics.client.RoyalGlaiveRenderer;
 import software.bernie.geckolib.animatable.GeoItem;
@@ -73,6 +77,25 @@ public final class RoyalGlaiveItem extends SwordItem implements GeoItem {
         level.playSound(null, player.blockPosition(), SoundEvents.TRIDENT_THROW.value(), SoundSource.PLAYERS, 1.0F, 0.9F);
         player.awardStat(Stats.ITEM_USED.get(this));
         player.getCooldowns().addCooldown(this, 10);
+    }
+
+    // 玩家平砍命中时生成月牙雷光，并向附近敌对生物跳出两条雷链。
+    @Override
+    public boolean hurtEnemy(ItemStack stack, LivingEntity mob, LivingEntity attacker) {
+        boolean result = super.hurtEnemy(stack, mob, attacker);
+        if (!(attacker.level() instanceof ServerLevel level)) return result;
+        float tilt = attacker.tickCount % 2 == 0 ? -1.0F : 1.0F;
+        Vec3 chest = mob.position().add(0.0D, mob.getBbHeight() * 0.5D, 0.0D);
+        ThunderFx.playerSlash(level, attacker, chest, tilt);
+        int chained = 0;
+        for (LivingEntity other : level.getEntitiesOfClass(LivingEntity.class, mob.getBoundingBox().inflate(5.0D),
+                entity -> entity != mob && entity != attacker && entity.isAlive() && entity instanceof Enemy)) {
+            if (chained >= 2) break;
+            ThunderFx.chain(level, attacker, chest, other.position().add(0.0D, other.getBbHeight() * 0.5D, 0.0D));
+            other.hurt(level.damageSources().indirectMagic(attacker, attacker), 4.0F);
+            chained++;
+        }
+        return result;
     }
 
     @Override

@@ -43,6 +43,8 @@ public final class ClientEvents {
         event.registerEntityRenderer(ModEntities.THROWN_ROYAL_WEAPON.get(), ThrownRoyalWeaponRenderer::new);
         // 同一渲染器绘制整波预警、落雷和余波电弧。
         event.registerEntityRenderer(ModEntities.ROYAL_STORM_WAVE.get(), RoyalStormRenderer::new);
+        // 新增的招式雷霆使用独立短命实体，网格渲染不会依赖粒子刷新。
+        event.registerEntityRenderer(ModEntities.THUNDER_FX.get(), ThunderFxRenderer::new);
     }
 
     private ClientEvents() {

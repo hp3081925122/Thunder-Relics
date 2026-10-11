@@ -18,6 +18,7 @@ import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.renderer.GeoArmorRenderer;
+import software.bernie.geckolib.renderer.layer.AutoGlowingGeoLayer;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 // 四件王铠分别使用原版装备槽位，并共享高于下界合金的专属材料。
@@ -66,6 +67,8 @@ public final class RoyalArmorItem extends ArmorItem implements GeoItem {
                 if (renderer == null) {
                     renderer = new GeoArmorRenderer<>(new RoyalEquipmentModel<>(
                             "royal_armor", "textures/armor/royal_armor.png"));
+                    // 读取独立发光遮罩，让王铠雷纹和核心在夜间保持发光效果。
+                    renderer.addRenderLayer(new AutoGlowingGeoLayer<>(renderer));
                 }
                 renderer.prepForRender(entity, stack, slot, original);
                 return renderer;

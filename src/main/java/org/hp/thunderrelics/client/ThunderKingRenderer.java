@@ -10,6 +10,7 @@ import software.bernie.geckolib.util.RenderUtil;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.RenderType;
 import org.joml.Matrix4f;
+import org.joml.Vector4f;
 
 // 使用 GeoEntityRenderer 绘制实体，并让模型的像素贴图保持原始清晰度。
 public final class ThunderKingRenderer extends GeoEntityRenderer<ThunderKingEntity> {
@@ -29,12 +30,17 @@ public final class ThunderKingRenderer extends GeoEntityRenderer<ThunderKingEnti
         renderOriginInverse = new Matrix4f(pose.last().pose()).invert();
         bladeTransform = null;
         if (RoyalSlashDebug.ENABLED) getGeoModel().getBone("weapon_head").ifPresent(bone -> bone.setTrackingMatrices(true));
+        // 记录特效需要的握柄、刃头、左手和悬浮石骨骼位置。
+        for (String name : new String[]{"weapon_head", "weapon_grip", "hand_left", "stone_0", "stone_1", "stone_2", "stone_3"}) {
+            getGeoModel().getBone(name).ifPresent(bone -> bone.setTrackingMatrices(true));
+        }
         super.render(entity, yaw, partialTick, pose, buffers, light);
         slash.render(entity, getGeoModel(), bladeTransform, pose, buffers, partialTick);
         // 引雷仪式双手举高武器时，以真实武器骨骼顶部为端点绘制接引雷霆。
         RoyalStormRenderer.renderWeaponRelay(entity, bladeTransform, pose, buffers, partialTick);
         // 双手下劈的雷电使用同一个真实刃头矩阵，避免特效与挥砍方向脱节。
         RoyalStormRenderer.renderSlamLightning(entity, bladeTransform, pose, buffers, partialTick);
+        ThunderKingFx.render(entity, pose, buffers, partialTick);
     }
 
     // 使用与实际武器绘制完全相同的父级、枢轴和旋转，采集未经辅助方法加工的刃头矩阵。
@@ -49,6 +55,18 @@ public final class ThunderKingRenderer extends GeoEntityRenderer<ThunderKingEnti
             RenderUtil.rotateMatrixAroundBone(pose, bone);
             RenderUtil.scaleMatrixForBone(pose, bone);
             bladeTransform = new Matrix4f(renderOriginInverse).mul(pose.last().pose());
+            pose.popPose();
+        }
+        if (!reRender && (bone.getName().equals("weapon_head") || bone.getName().equals("weapon_grip")
+                || bone.getName().equals("hand_left") || bone.getName().startsWith("stone_"))) {
+            pose.pushPose();
+            RenderUtil.translateMatrixToBone(pose, bone);
+            RenderUtil.translateToPivotPoint(pose, bone);
+            RenderUtil.rotateMatrixAroundBone(pose, bone);
+            RenderUtil.scaleMatrixForBone(pose, bone);
+            Matrix4f local = new Matrix4f(renderOriginInverse).mul(pose.last().pose());
+            Vector4f point = local.transform(new Vector4f(0, 0, 0, 1));
+            ThunderKingFx.capture(entity.getId(), bone.getName(), new net.minecraft.world.phys.Vec3(point.x(), point.y(), point.z()));
             pose.popPose();
         }
         super.renderRecursively(pose, entity, bone, type, buffers, vertices, reRender, partialTick,

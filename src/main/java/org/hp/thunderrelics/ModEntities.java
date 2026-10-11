@@ -18,6 +18,7 @@ import net.neoforged.neoforge.common.DeferredSpawnEggItem;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import org.hp.thunderrelics.entity.RoyalStormWave;
+import org.hp.thunderrelics.entity.ThunderFx;
 import org.hp.thunderrelics.entity.ThunderKingEntity;
 import org.hp.thunderrelics.entity.ThrownRoyalWeapon;
 import org.hp.thunderrelics.item.RoyalArmorItem;
@@ -59,6 +60,11 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<RoyalStormWave>> ROYAL_STORM_WAVE = ENTITIES.register("royal_storm_wave",
             () -> EntityType.Builder.of(RoyalStormWave::new, MobCategory.MISC).sized(.1F, .1F)
                     .clientTrackingRange(12).updateInterval(20).build(Thunderrelics.MOD_ID + ":royal_storm_wave"));
+
+    // 短命雷霆特效实体只同步起止点和种类，具体网格由客户端渲染器绘制。
+    public static final DeferredHolder<EntityType<?>, EntityType<ThunderFx>> THUNDER_FX = ENTITIES.register("thunder_fx",
+            () -> EntityType.Builder.of(ThunderFx::new, MobCategory.MISC).sized(.1F, .1F)
+                    .clientTrackingRange(12).updateInterval(1).build(Thunderrelics.MOD_ID + ":thunder_fx"));
 
     // 使用 NeoForge 延迟刷怪蛋，确保实体注册完成后再解析实体类型。
     public static final DeferredHolder<Item, SpawnEggItem> THUNDER_KING_SPAWN_EGG = ITEMS.register("thunder_king_spawn_egg",

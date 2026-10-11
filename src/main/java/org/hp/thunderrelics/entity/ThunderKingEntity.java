@@ -1,7 +1,32 @@
 package org.hp.thunderrelics.entity;
 
+import software.bernie.geckolib.animatable.GeoEntity;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.RawAnimation;
+import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.util.GeckoLibUtil;
+import com.mojang.logging.LogUtils;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerBossEvent;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.Mth;
+import net.minecraft.world.BossEvent;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
@@ -14,80 +39,53 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.server.level.ServerBossEvent;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.BossEvent;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.sounds.SoundEvents;
 import org.hp.thunderrelics.ModEntities;
 import org.hp.thunderrelics.ThunderrelicsConfig;
-import org.hp.thunderrelics.effect.DecorativeLightning;
-import com.mojang.logging.LogUtils;
-import java.util.Optional;
-import java.util.UUID;
-import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.animation.AnimationController;
-import software.bernie.geckolib.animation.AnimatableManager;
-import software.bernie.geckolib.animation.RawAnimation;
-import software.bernie.geckolib.animation.PlayState;
-import software.bernie.geckolib.util.GeckoLibUtil;
 
-// 雷霆君王的服务端实体，攻击时触发持械模型的横斩动画并持续面向目标。
+// 雷霆君王：招式表驱动的服务端战斗逻辑，特效时刻与 ThunderSkill 共用同一时间线。
 public final class ThunderKingEntity extends Monster implements GeoEntity {
     private static final String ANIMATION_PREFIX = "animation.thunder_king.";
-    // 近战和投掷攻击周期缩短到原来的八成，约等于频率提高百分之二十五。
-    private static final double COMBAT_RATE = 0.80D;
-    private static final double COMBAT_ANIMATION_SPEED = 1.0D / COMBAT_RATE;
-    // 使用血条唯一编号识别专属材质，不依赖可被命名牌修改的名称。
-    private static final EntityDataAccessor<Optional<UUID>> BOSS_BAR_ID = SynchedEntityData.defineId(
-            ThunderKingEntity.class, EntityDataSerializers.OPTIONAL_UUID);
-    // 同步技能类型与起手世界时间，让刀光只在对应挥砍窗口出现。
+    // 血条编号让客户端识别专属血条材质。
+    private static final EntityDataAccessor<String> BOSS_BAR_ID = SynchedEntityData.defineId(
+            ThunderKingEntity.class, EntityDataSerializers.STRING);
+    // 当前招式编号与起手世界时间，客户端据此驱动特效。
     private static final EntityDataAccessor<Integer> SWING_KIND = SynchedEntityData.defineId(
             ThunderKingEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Long> SWING_START = SynchedEntityData.defineId(
             ThunderKingEntity.class, EntityDataSerializers.LONG);
-    // 行走和攻击共用控制器，攻击触发后优先播放完整攻击动作。
-    private static final RawAnimation WALK = RawAnimation.begin().thenLoop(ANIMATION_PREFIX + "walk");
-    private final ServerBossEvent bossEvent = new ServerBossEvent(getDisplayName(),
-            BossEvent.BossBarColor.BLUE, BossEvent.BossBarOverlay.PROGRESS);
-    private static final RawAnimation CLEAVE = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "cleave");
-    private static final RawAnimation DOUBLE_CLEAVE = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "double_cleave");
-    private static final RawAnimation HEAVY_SLAM = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "heavy_slam");
-    // 双手重劈在头顶停顿六个游戏刻，再沿身体中线快速下劈。
-    private static final RawAnimation TWO_HANDED_SLAM = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "two_handed_slam");
-    // 投标枪动作的脱手与结束时机会按战斗速率缩短。
-    private static final RawAnimation JAVELIN_THROW = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "javelin_throw");
-    // 转身动画为一秒点二，服务端用二十四刻锁定导航和技能，和 GeckoLib 的二十帧每秒一致。
-    private static final RawAnimation TURN = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "turn");
-    private static final RawAnimation TURN_LEFT = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "turn_left");
-    private static final int TURN_ATTACK_TYPE = 6;
-    private static final int TURN_DURATION = 24;
-    private static final float TURN_TRIGGER_ANGLE = 50.0F;
-    private static final int TURN_COOLDOWN = 8;
-    private int throwCooldown = fasterTicks(40);
-    // 引雷再次发动间隔按原值八成，完整举戟仪式仍持续六秒。
-    private int stormCooldown = fasterTicks(100);
-    private static final RawAnimation STORM = RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "storm_ritual");
-    private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
-    private int attackCounter;
-    private int attackType;
-    private int nextAttackType;
-    private UUID attackTarget;
-    // 记录转身结束时应对齐的目标方向，目标丢失时仍能完成当前转身。
-    private float turnTargetYaw;
-    private int turnCooldown;
+    private static final RawAnimation WALK_LEGS = RawAnimation.begin().thenLoop(ANIMATION_PREFIX + "walk_legs");
+    private static final RawAnimation IDLE = RawAnimation.begin().thenLoop(ANIMATION_PREFIX + "idle");
+    // 近战轮换：横斩、单手重劈、横斩、双手重砸。
+    private static final ThunderSkill[] MELEE_ROTATION = {ThunderSkill.CLEAVE, ThunderSkill.HEAVY_SLAM,
+            ThunderSkill.CLEAVE, ThunderSkill.TWO_HANDED_SLAM};
+    // 每刻最大转向角度，避免大角度瞬间翻转。
+    private static final float MAX_TURN_PER_TICK = 12.0F;
+    // 行走动画按每秒二点二二格的地面速度制作，播放速率随实际移动速度缩放以防滑步。
+    private static final double WALK_DESIGN_BLOCKS_PER_SECOND = 2.22D;
+    // 悬浮石在模型中的轴心（几何像素坐标），用于估算遗石雷殛的起点。
+    private static final double[][] STONE_PIVOTS = {{16, 50.84, 3}, {-16, 50.84, 3}, {20, 40.84, 5}, {-20, 40.84, 5}};
 
-    // 将与动画长度对应的游戏刻按统一比例缩短，并至少保留一刻避免零时长攻击。
-    private static int fasterTicks(int original) {
-        return Math.max(1, (int) Math.round(original * COMBAT_RATE));
-    }
+    private final ServerBossEvent bossEvent;
+    private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
+    private ThunderSkill skill;
+    private int skillTick;
+    private UUID skillTarget;
+    private int meleeIndex;
+    private int javelinCooldown = 60;
+    private int stormCooldown = 160;
+    private int relicCooldown = 100;
+    private int plantCooldown = 140;
+    private final List<LivingEntity> relicTargets = new ArrayList<>();
+    // 仅客户端记录上一帧是否在播放行走，用于输出状态切换调试。
+    private boolean lastWalkState;
 
     public ThunderKingEntity(EntityType<? extends ThunderKingEntity> type, Level level) {
         super(type, level);
+        // 26.1.2 的首领事件需要显式 UUID，使用实体 UUID 让血条关联稳定。
+        bossEvent = new ServerBossEvent(getDisplayName(),
+                BossEvent.BossBarColor.BLUE, BossEvent.BossBarOverlay.PROGRESS);
         xpReward = 25;
         // 配置在实体注册后才可读取；实例创建时同步已加载配置中的生命值和护甲。
         if (ThunderrelicsConfig.SPEC.isLoaded()) {
@@ -97,15 +95,13 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
                     ThunderrelicsConfig.THUNDER_KING_ARMOR.get().doubleValue());
             setHealth(getMaxHealth());
         }
-        // 客户端通过同步字段将原版血条事件关联到本实体。
-        if (!level.isClientSide) entityData.set(BOSS_BAR_ID, Optional.of(bossEvent.getId()));
+        if (!level.isClientSide) entityData.set(BOSS_BAR_ID, bossEvent.getId().toString());
     }
 
-    // 在实体初始化阶段定义网络同步字段。
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
-        builder.define(BOSS_BAR_ID, Optional.empty());
+        builder.define(BOSS_BAR_ID, "");
         builder.define(SWING_KIND, -1);
         builder.define(SWING_START, -1L);
     }
@@ -121,17 +117,23 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
 
     // 仅供客户端血条渲染识别对应的雷霆君王。
     public Optional<UUID> getBossBarId() {
-        return entityData.get(BOSS_BAR_ID);
+        String value = entityData.get(BOSS_BAR_ID);
+        if (value.isEmpty()) return Optional.empty();
+        try {
+            return Optional.of(UUID.fromString(value));
+        } catch (IllegalArgumentException ignored) {
+            return Optional.empty();
+        }
     }
 
-    // 接引雷霆期间将所有实际受到的伤害减半，客户端预测仍由服务端结果校正。
+    // 接引雷霆期间受到的伤害减半。
     @Override
-    public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
-        if (!level().isClientSide && attackType == 5 && attackCounter > 0) amount *= 0.5F;
+    public boolean hurt(DamageSource source, float amount) {
+        if (skill == ThunderSkill.STORM) amount *= 0.5F;
         return super.hurt(source, amount);
     }
 
-    // 实体属性注册发生在 Forge 配置文件加载前，因此注册阶段只能读取已核对的默认值。
+    // 实体属性注册发生在配置加载前，注册阶段只能读取默认值。
     public static AttributeSupplier.Builder createAttributes() {
         return Monster.createMonsterAttributes()
                 .add(Attributes.MAX_HEALTH, ThunderrelicsConfig.THUNDER_KING_MAX_HEALTH.getDefault().doubleValue())
@@ -143,18 +145,16 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
                 .add(Attributes.KNOCKBACK_RESISTANCE, 0.8D);
     }
 
-    // 使用原版近战目标、索敌和基础游荡目标，保持新模组的依赖面最小。
+    // 原版近战目标负责接近与触发近战招式，出招期间停止寻路。
     @Override
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0D, false) {
-            // 挥击过程中停止寻路推进，避免贴身推挤并使命中距离稳定。
             @Override
             public void tick() {
-                if (attackCounter > 0) getNavigation().stop();
+                if (skill != null) getNavigation().stop();
                 else super.tick();
             }
-
         });
         goalSelector.addGoal(7, new RandomStrollGoal(this, 0.8D));
         goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 16.0F));
@@ -163,271 +163,350 @@ public final class ThunderKingEntity extends Monster implements GeoEntity {
         targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));
     }
 
-    // 目标存在时每刻更新头、身体和实体朝向；转身窗口交给动画根骨骼平滑完成。
     @Override
     public void tick() {
         super.tick();
-        // 服务端同步血量和名称，覆盖受伤、治疗以及命名后的显示变化。
-        if (!level().isClientSide) {
-            bossEvent.setProgress(getHealth() / getMaxHealth());
-            bossEvent.setName(getDisplayName());
-            if (throwCooldown > 0) throwCooldown--;
-            if (stormCooldown > 0) stormCooldown--;
-            if (turnCooldown > 0) turnCooldown--;
-        }
         LivingEntity target = getTarget();
-        if (target != null && target.isAlive()) {
-            float yaw = (float) Math.toDegrees(Math.atan2(-(target.getX() - getX()), target.getZ() - getZ()));
-            boolean turnActive = getSwingKind() == TURN_ATTACK_TYPE
-                    && (level().isClientSide || attackType == TURN_ATTACK_TYPE && attackCounter > 0);
-            // 只有明显偏转且当前没有技能时才进入转身，避免目标小幅移动造成动画抖动。
-            if (!level().isClientSide && !turnActive && attackCounter == 0 && turnCooldown == 0) {
-                float delta = wrapDegrees(yaw - getYRot());
-                if (Math.abs(delta) >= TURN_TRIGGER_ANGLE) {
-                    startTurn(target, yaw, delta);
-                    turnActive = true;
-                }
+        faceTarget(target);
+        if (level().isClientSide) return;
+        bossEvent.setProgress(getHealth() / getMaxHealth());
+        bossEvent.setName(getDisplayName());
+        if (javelinCooldown > 0) javelinCooldown--;
+        if (stormCooldown > 0) stormCooldown--;
+        if (relicCooldown > 0) relicCooldown--;
+        if (plantCooldown > 0) plantCooldown--;
+        if (skill == null) chooseRangedSkill(target);
+        if (skill != null) updateSkill(target);
+    }
+
+    // 平滑转向目标；近战命中帧之后锁定朝向，让收招不跟随目标转身。
+    private void faceTarget(LivingEntity target) {
+        if (target == null || !target.isAlive()) return;
+        ThunderSkill current = ThunderSkill.byId(getSwingKind());
+        if (current != null && isMelee(current) && getSwingStart() >= 0L
+                && level().getGameTime() - getSwingStart() > current.event(0)) return;
+        float yaw = (float) Math.toDegrees(Math.atan2(-(target.getX() - getX()), target.getZ() - getZ()));
+        float turned = Mth.approachDegrees(getYRot(), yaw, MAX_TURN_PER_TICK);
+        getLookControl().setLookAt(target, 30.0F, 30.0F);
+        setYRot(turned);
+        setYHeadRot(turned);
+        setYBodyRot(turned);
+    }
+
+    private static boolean isMelee(ThunderSkill s) {
+        return s == ThunderSkill.CLEAVE || s == ThunderSkill.HEAVY_SLAM || s == ThunderSkill.TWO_HANDED_SLAM;
+    }
+
+    // 空闲时按优先级选择引雷、遗石雷殛与投戟。
+    private void chooseRangedSkill(LivingEntity target) {
+        if (!isValidTarget(target)) return;
+        double distance = distanceTo(target);
+        boolean sight = hasLineOfSight(target);
+        if (stormCooldown == 0 && distance <= 26.0D && sight) {
+            stormCooldown = 576;
+            startSkill(ThunderSkill.STORM, target);
+        } else if (plantCooldown == 0 && distance >= 3.0D && distance <= 15.0D && sight) {
+            plantCooldown = 240;
+            startSkill(ThunderSkill.GROUND_PLANT, target);
+        } else if (relicCooldown == 0 && distance >= 4.0D && distance <= 22.0D && sight) {
+            relicCooldown = 220;
+            startSkill(ThunderSkill.RELIC_BARRAGE, target);
+        } else if (javelinCooldown == 0 && distance > 4.5D && distance <= 16.0D && sight) {
+            javelinCooldown = 128;
+            startSkill(ThunderSkill.JAVELIN, target);
+        }
+    }
+
+    // 有效敌对目标：存活、非友军、非创造或旁观玩家。
+    private boolean isValidTarget(LivingEntity target) {
+        if (target == null || !target.isAlive() || target == this || isAlliedTo(target)) return false;
+        return !(target instanceof Player player && (player.isCreative() || player.isSpectator()));
+    }
+
+    // 启动招式：同步编号与起手时刻，触发动画并停止寻路。
+    private void startSkill(ThunderSkill next, LivingEntity target) {
+        skill = next;
+        skillTick = 0;
+        skillTarget = target.getUUID();
+        entityData.set(SWING_KIND, next.ordinal());
+        entityData.set(SWING_START, level().getGameTime());
+        getNavigation().stop();
+        triggerAnim("combat", next.animation);
+        LogUtils.getLogger().debug("Thunder King skill start: entity={}, skill={}, target={}, duration={}",
+                getId(), next, skillTarget, next.duration);
+    }
+
+    // 逐刻推进招式，在关键事件刻结算伤害与生成特效。
+    private void updateSkill(LivingEntity target) {
+        int elapsed = skillTick;
+        LivingEntity locked = null;
+        if (target != null && target.getUUID().equals(skillTarget) && isValidTarget(target)) locked = target;
+        if (skill == ThunderSkill.CLEAVE) cleaveStep(locked, elapsed);
+        // 遍历当前招式的全部事件刻。
+        for (int i = 0; i < skill.eventCount(); i++) {
+            if (elapsed == skill.event(i)) onSkillEvent(i, locked);
+        }
+        if (skill == ThunderSkill.STORM && elapsed > 0 && elapsed % 20 == 0) heal(getMaxHealth() * 0.01F);
+        skillTick++;
+        if (skillTick >= skill.duration) {
+            LogUtils.getLogger().debug("Thunder King skill end: entity={}, skill={}", getId(), skill);
+            skill = null;
+            relicTargets.clear();
+        }
+    }
+
+    // 横斩在迈步阶段向目标推进，保留近身停距。
+    private void cleaveStep(LivingEntity target, int elapsed) {
+        if (target == null || !onGround()) return;
+        double phase = elapsed / (double) skill.duration;
+        double speed = 0.0D;
+        if (phase >= 0.12D && phase <= 0.44D) speed = 0.15D;
+        if (phase >= 0.62D && phase <= 0.9D) speed = 0.07D;
+        Vec3 toward = target.position().subtract(position()).multiply(1.0D, 0.0D, 1.0D);
+        double distance = toward.length();
+        double stop = (getBbWidth() + target.getBbWidth()) * 0.5D + 0.6D;
+        if (speed > 0.0D && distance > stop) move(MoverType.SELF, toward.scale(Math.min(speed, distance - stop) / distance));
+    }
+
+    // 招式事件分发。
+    private void onSkillEvent(int index, LivingEntity target) {
+        ServerLevel level = (ServerLevel) level();
+        float attack = (float) getAttributeValue(Attributes.ATTACK_DAMAGE);
+        if (skill == ThunderSkill.CLEAVE) {
+            playSound(SoundEvents.PLAYER_ATTACK_SWEEP, 1.6F, 0.6F);
+            int hits = sweepHit(level, 4.3D, 75.0D, attack + 3.0F, 0.6D, 0.15D, true);
+            LogUtils.getLogger().debug("Thunder King cleave: hits={}", hits);
+        } else if (skill == ThunderSkill.HEAVY_SLAM) {
+            Vec3 impact = ThunderFx.floor(level, frontPoint(4.0D));
+            ThunderFx.slam(level, this, impact, 1.0F);
+            int hits = areaHit(level, impact, 3.0D, attack * 1.5F + 3.0F, 0.8D, 0.45D);
+            hits += sweepHit(level, 4.6D, 28.0D, attack * 1.5F, 0.8D, 0.3D, false);
+            LogUtils.getLogger().debug("Thunder King heavy slam: impact={}, hits={}", impact, hits);
+        } else if (skill == ThunderSkill.TWO_HANDED_SLAM) {
+            Vec3 impact = ThunderFx.floor(level, frontPoint(4.2D));
+            ThunderFx.slam(level, this, impact, 1.6F);
+            int hits = areaHit(level, impact, 4.5D, attack * 1.8F + 4.0F, 1.1D, 0.7D);
+            LogUtils.getLogger().debug("Thunder King two handed slam: impact={}, hits={}", impact, hits);
+        } else if (skill == ThunderSkill.JAVELIN) {
+            if (index == 0 && target != null && hasLineOfSight(target)) throwWeapon(target);
+            if (index == 1) playSound(SoundEvents.TRIDENT_RETURN, 1.0F, 0.8F);
+        } else if (skill == ThunderSkill.STORM) {
+            stormEvent(level, index, target);
+        } else if (skill == ThunderSkill.RELIC_BARRAGE) {
+            fireRelic(level, index, target, attack);
+        } else if (skill == ThunderSkill.GROUND_PLANT && index == 0) {
+            plantWeapon(level, attack);
+        }
+    }
+
+    // 实体正前方水平距离处的点。
+    private Vec3 frontPoint(double distance) {
+        double yaw = Math.toRadians(getYRot());
+        return position().add(-Math.sin(yaw) * distance, 0.0D, Math.cos(yaw) * distance);
+    }
+
+    // 扇形横扫：距离与夹角内且可见的敌人受到伤害与击退，可选附带命中天雷。
+    private int sweepHit(ServerLevel level, double reach, double halfAngle, float damage, double knockback,
+                         double lift, boolean bolts) {
+        Vec3 forward = frontPoint(1.0D).subtract(position()).normalize();
+        int hits = 0;
+        // 收集范围内候选并逐个做夹角与视线判定。
+        for (LivingEntity victim : level.getEntitiesOfClass(LivingEntity.class, getBoundingBox().inflate(reach, 2.0D, reach))) {
+            if (!isValidTarget(victim)) continue;
+            Vec3 offset = victim.position().subtract(position()).multiply(1.0D, 0.0D, 1.0D);
+            double distance = offset.length() - victim.getBbWidth() * 0.5D;
+            if (distance > reach || Math.abs(victim.getY() - getY()) > 3.0D) continue;
+            if (offset.lengthSqr() > 0.01D) {
+                double angle = Math.toDegrees(Math.acos(Mth.clamp(offset.normalize().dot(forward), -1.0D, 1.0D)));
+                if (angle > halfAngle) continue;
             }
-            // 转身期间保留实体原朝向，动画根骨骼负责旋转；其他状态继续实时锁定目标。
-            if (turnActive) {
-                getNavigation().stop();
-            } else {
-                getLookControl().setLookAt(target, 30.0F, 30.0F);
-                setYRot(yaw);
-                setYHeadRot(yaw);
-                setYBodyRot(yaw);
+            if (!hasLineOfSight(victim)) continue;
+            if (victim.hurt(damageSources().mobAttack(this), damage)) {
+                victim.knockback(knockback, -offset.x, -offset.z);
+                victim.push(0.0D, lift, 0.0D);
+                victim.hurtMarked = true;
+                if (bolts && hits < 3) ThunderFx.hitBolt(level, this, victim.position());
+                hits++;
             }
         }
-        // 转身单独处理，避免落入近战命中帧、投掷或引雷分支。
-        if (!level().isClientSide && attackType == TURN_ATTACK_TYPE && attackCounter > 0) {
-            int elapsed = TURN_DURATION - attackCounter + 1;
-            getNavigation().stop();
-            if (elapsed >= TURN_DURATION) {
-                LivingEntity turnTarget = getTarget();
-                float finalYaw = turnTarget != null && turnTarget.isAlive() ? targetYaw(turnTarget, this) : turnTargetYaw;
-                setYRot(finalYaw);
-                setYHeadRot(finalYaw);
-                setYBodyRot(finalYaw);
-                attackCounter = 0;
-                attackType = -1;
-                entityData.set(SWING_KIND, -1);
-                entityData.set(SWING_START, -1L);
-                turnCooldown = TURN_COOLDOWN;
-            } else {
-                attackCounter--;
+        return hits;
+    }
+
+    // 圆形范围伤害：以落点为中心，向外击退并击飞。
+    private int areaHit(ServerLevel level, Vec3 center, double radius, float damage, double knockback, double lift) {
+        int hits = 0;
+        AABB box = new AABB(center, center).inflate(radius, 2.5D, radius);
+        // 水平距离判定圆形范围。
+        for (LivingEntity victim : level.getEntitiesOfClass(LivingEntity.class, box)) {
+            if (!isValidTarget(victim)) continue;
+            Vec3 offset = victim.position().subtract(center).multiply(1.0D, 0.0D, 1.0D);
+            if (offset.length() > radius + victim.getBbWidth() * 0.5D) continue;
+            if (victim.hurt(damageSources().mobAttack(this), damage)) {
+                Vec3 push = offset;
+                if (push.lengthSqr() < 0.01D) push = victim.position().subtract(position());
+                victim.knockback(knockback, -push.x, -push.z);
+                victim.push(0.0D, lift, 0.0D);
+                victim.hurtMarked = true;
+                hits++;
             }
+        }
+        return hits;
+    }
+
+    // 投出王戟：离手点按动画右手前上方位置换算，朝释放时的目标飞行。
+    private void throwWeapon(LivingEntity target) {
+        double yaw = Math.toRadians(getYRot());
+        Vec3 forward = new Vec3(-Math.sin(yaw), 0, Math.cos(yaw));
+        Vec3 right = new Vec3(-Math.cos(yaw), 0, -Math.sin(yaw));
+        Vec3 start = position().add(0, 43.0D / 16.0D, 0).add(forward.scale(11.0D / 16.0D)).add(right.scale(8.0D / 16.0D));
+        ThrownRoyalWeapon weapon = new ThrownRoyalWeapon(ModEntities.THROWN_ROYAL_WEAPON.get(), level());
+        weapon.setOwner(this);
+        weapon.setPos(start.x, start.y, start.z);
+        Vec3 aim = target.position().add(0, target.getBbHeight() * 0.55D, 0).subtract(start);
+        weapon.shoot(aim.x, aim.y + aim.horizontalDistance() * 0.04D, aim.z, 1.6F, 0.0F);
+        level().addFreshEntity(weapon);
+        playSound(SoundEvents.TRIDENT_THROW.value(), 1.6F, 0.7F);
+    }
+
+    // 引雷仪式：首个事件改变天气，随后三波落雷各自锁定当时目标脚下。
+    private void stormEvent(ServerLevel level, int index, LivingEntity target) {
+        if (index == 0) {
+            level.setWeatherParameters(0, 6000, true, true);
+            playSound(SoundEvents.TRIDENT_THUNDER.value(), 2.0F, 0.65F);
             return;
         }
-        // 大范围技能优先于投掷，起手时仍持续看向目标。
-        if (!level().isClientSide && attackCounter == 0 && stormCooldown == 0 && target != null
-                && target.isAlive() && distanceToSqr(target) <= 26 * 26 && hasLineOfSight(target)
-                && !isAlliedTo(target)) startStorm(target);
-        // 中距离有视线时启动投掷，近距离仍保留原有近战连招。
-        if (!level().isClientSide && attackCounter == 0 && throwCooldown == 0
-                && target != null && target.isAlive() && distanceToSqr(target) > 16.0D
-                && distanceToSqr(target) <= 256.0D && hasLineOfSight(target) && !isAlliedTo(target)) {
-            attackType = 4;
-            entityData.set(SWING_KIND, 4);
-            entityData.set(SWING_START, level().getGameTime());
-            attackCounter = fasterTicks(52);
-            attackTarget = target.getUUID();
-            throwCooldown = fasterTicks(160);
-            getNavigation().stop();
-            triggerAnim("combat", "javelin_throw");
+        if (target != null) RoyalStormWave.spawn(this, target);
+    }
+
+    // 遗石雷殛：第几块悬浮石向高空射出雷光，分配给不同敌人并预判其移动。
+    private void fireRelic(ServerLevel level, int stone, LivingEntity target, float attack) {
+        if (stone == 0) collectRelicTargets(level, target);
+        if (relicTargets.isEmpty()) return;
+        LivingEntity victim = relicTargets.get(stone % relicTargets.size());
+        if (!victim.isAlive()) victim = relicTargets.get(0);
+        Vec3 velocity = victim.getDeltaMovement().multiply(1.0D, 0.0D, 1.0D).scale(ThunderFx.RELIC_STRIKE_TICK * 0.6D);
+        if (velocity.length() > 3.0D) velocity = velocity.normalize().scale(3.0D);
+        Vec3 aim = victim.position().add(velocity);
+        // 同一目标被多道雷锁定时，后续落点向周围散开封堵走位。
+        if (stone >= relicTargets.size()) {
+            double angle = getRandom().nextDouble() * Math.PI * 2.0D;
+            aim = aim.add(Math.cos(angle) * 1.8D, 0.0D, Math.sin(angle) * 1.8D);
         }
-        // 转向完成后按动画命中帧结算；目标换人或失效不会把伤害转移给新目标。
-        if (!level().isClientSide && attackCounter > 0) {
-            // 引雷仪式保留六秒蓄力，其余攻击使用加速后的动画时长。
-            int duration = attackType == 5 ? 120 : attackType == 4 ? fasterTicks(52) : attackType == 3 ? fasterTicks(46) : attackType == 1 ? fasterTicks(47) : attackType == 2 ? fasterTicks(41) : fasterTicks(33);
-            int elapsed = duration - attackCounter + 1;
-            // 单次横斩在迈步与后脚跟进阶段推进实体，使用碰撞移动避免穿墙，并保留近身停距。
-            if (attackType == 0 && onGround() && target != null && target.isAlive()
-                    && target.getUUID().equals(attackTarget) && !isAlliedTo(target) && hasLineOfSight(target)) {
-                double phase = (double) elapsed / duration;
-                double speed = phase >= 0.12D && phase <= 0.44D ? 0.14D
-                        : phase >= 0.62D && phase <= 0.9D ? 0.07D : 0.0D;
-                Vec3 toward = target.position().subtract(position()).multiply(1.0D, 0.0D, 1.0D);
-                double distance = toward.length();
-                double stopDistance = (getBbWidth() + target.getBbWidth()) * 0.5D + 0.5D;
-                if (speed > 0.0D && distance > stopDistance) {
-                    move(net.minecraft.world.entity.MoverType.SELF,
-                            toward.scale(Math.min(speed, distance - stopDistance) / distance));
-                }
+        Vec3 point = ThunderFx.floor(level, aim);
+        ThunderFx.relicBolt(level, this, stone, stonePosition(stone), point, attack * 1.1F, 1.8D);
+        LogUtils.getLogger().debug("Thunder King relic fire: stone={}, victim={}, point={}", stone, victim.getUUID(), point);
+    }
+
+    // 王戟插地：插地点冲击，三条路径（正前、左前、右前）由近及远依次落雷。
+    private void plantWeapon(ServerLevel level, float attack) {
+        Vec3 plant = ThunderFx.floor(level, frontPoint(3.0D));
+        ThunderFx.slam(level, this, plant, 0.8F);
+        int hits = areaHit(level, plant, 2.2D, attack * 1.2F, 0.6D, 0.4D);
+        double yaw = Math.toRadians(getYRot());
+        int[] order = {1, 0, 2};
+        double[] angles = {-32.0D, 0.0D, 32.0D};
+        // 每条路径六道雷，相邻间隔二点三格，延迟逐道递增。
+        for (int path = 0; path < 3; path++) {
+            double a = yaw + Math.toRadians(angles[path]);
+            Vec3 dir = new Vec3(-Math.sin(a), 0.0D, Math.cos(a));
+            Vec3 previous = plant;
+            for (int j = 0; j < 6; j++) {
+                Vec3 point = ThunderFx.floor(level, position().add(dir.scale(3.6D + j * 2.3D)).add(0.0D, 1.5D, 0.0D));
+                int delay = 6 + j * 3 + order[path];
+                ThunderFx.laneBolt(level, this, previous, point, delay, attack * 0.9F + 2.0F, 1.7D);
+                previous = point;
             }
-            // 双手向上托举完成时改变天气，随后三波分别固定当时目标脚下的位置。
-            if (attackType == 5) {
-                if (elapsed == 42 && level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-                    serverLevel.setWeatherParameters(0, 6000, true, true);
-                    playSound(SoundEvents.TRIDENT_THUNDER.value(), 2, .65F);
-                }
-                if ((elapsed == 44 || elapsed == 64 || elapsed == 84) && target != null && target.isAlive()
-                        && target.getUUID().equals(attackTarget)) RoyalStormWave.spawn(this, target);
-                // 接引阶段每秒恢复最大生命值的百分之一，六秒仪式最多触发六次。
-                if (elapsed % 20 == 0) {
-                    heal(getMaxHealth() * 0.01F);
-                    LogUtils.getLogger().debug("Thunder King storm relay healing: tick={}, health={}", elapsed, getHealth());
-                }
-            }
-            // 离手位置按动画右手的前上方位置换算，弹体朝释放时的目标飞行。
-            if (attackType == 4 && elapsed == fasterTicks(24) && target != null && target.isAlive()
-                    && target.getUUID().equals(attackTarget) && hasLineOfSight(target)) {
-                double yaw = Math.toRadians(getYRot());
-                Vec3 forward = new Vec3(-Math.sin(yaw), 0, Math.cos(yaw));
-                Vec3 right = new Vec3(-Math.cos(yaw), 0, -Math.sin(yaw));
-                Vec3 start = position().add(0, 43.0D / 16.0D, 0)
-                        .add(forward.scale(11.0D / 16.0D)).add(right.scale(8.0D / 16.0D));
-                ThrownRoyalWeapon weapon = new ThrownRoyalWeapon(ModEntities.THROWN_ROYAL_WEAPON.get(), level());
-                weapon.setOwner(this);
-                weapon.setPos(start.x, start.y, start.z);
-                Vec3 aim = target.position().add(0, target.getBbHeight() * 0.55D, 0).subtract(start);
-                weapon.shoot(aim.x, aim.y + aim.horizontalDistance() * 0.04D, aim.z, 1.6F, 0.0F);
-                level().addFreshEntity(weapon);
-                playSound(SoundEvents.TRIDENT_THROW.value(), 1.6F, 0.7F);
-            }
-            // 武器恢复可见时给出召回提示，投掷阶段不会触发近战伤害窗口。
-            if (attackType == 4 && elapsed == fasterTicks(44)) playSound(SoundEvents.TRIDENT_RETURN, 1.0F, 0.8F);
-            boolean strike = attackType < 4 && (attackType == 3 ? elapsed == fasterTicks(22) : attackType == 2 ? elapsed == fasterTicks(20) : elapsed == fasterTicks(15) || attackType == 1 && elapsed == fasterTicks(27));
-            if (strike && target != null && target.getUUID().equals(attackTarget) && target.isAlive()) {
-                Vec3 offset = target.position().subtract(position());
-                double reach = attackType >= 2 ? 3.8D : 4.0D;
-                boolean inReach = offset.horizontalDistance() <= reach && Math.abs(offset.y) < 3
-                        && hasLineOfSight(target) && !isAlliedTo(target)
-                        && !(target instanceof Player player && (player.isCreative() || player.isSpectator()));
-                float damage = (float) getAttributeValue(Attributes.ATTACK_DAMAGE) * (attackType >= 2 ? 1.5F : 1.0F);
-                boolean hit = inReach && target.hurt(damageSources().mobAttack(this), damage);
-                if (hit) {
-                    target.knockback(attackType >= 2 ? 1.0D : 0.5D, -offset.x, -offset.z);
-                    target.hurtMarked = true;
-                    // Boss 每次近战命中额外落下一道装饰雷霆，雷霆伤害独立于挥砍伤害。
-                    // 近战命中附雷固定落在目标脚下。
-                    DecorativeLightning.strike(level(), target.position(),
-                            this, target, 3.0F, 0);
-                }
-                // 每次命中窗口仅记录一次调试，便于区分躲开、遮挡和实际伤害。
-                LogUtils.getLogger().debug("Thunder King strike: type={}, tick={}, inReach={}, hit={}, damage={}",
-                        attackType, elapsed, inReach, hit, damage);
-            }
-            attackCounter--;
         }
+        playSound(SoundEvents.ANVIL_LAND, 1.2F, 0.5F);
+        LogUtils.getLogger().debug("Thunder King ground plant: plant={}, hits={}", plant, hits);
     }
 
-    // 计算实体正面指向目标的 Minecraft 偏航角，统一服务端转身和收招对齐逻辑。
-    private static float targetYaw(LivingEntity target, ThunderKingEntity self) {
-        return (float) Math.toDegrees(Math.atan2(-(target.getX() - self.getX()), target.getZ() - self.getZ()));
+    // 收集二十四格内的敌人，主目标优先，其余按距离排序。
+    private void collectRelicTargets(ServerLevel level, LivingEntity target) {
+        relicTargets.clear();
+        if (isValidTarget(target)) relicTargets.add(target);
+        List<LivingEntity> others = new ArrayList<>();
+        // 只选择玩家与正在攻击君王的生物作为额外目标。
+        for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, getBoundingBox().inflate(24.0D, 8.0D, 24.0D))) {
+            if (entity == target || !isValidTarget(entity) || !hasLineOfSight(entity)) continue;
+            if (entity instanceof Player || entity.getLastHurtMob() == this) others.add(entity);
+        }
+        others.sort(Comparator.comparingDouble(this::distanceToSqr));
+        relicTargets.addAll(others);
     }
 
-    // 保留带符号的最短偏航差，正值和负值分别选择左右转身动画。
-    private static float wrapDegrees(float degrees) {
-        while (degrees > 180.0F) degrees -= 360.0F;
-        while (degrees < -180.0F) degrees += 360.0F;
-        return degrees;
+    // 估算悬浮石的世界坐标：模型绕竖轴按（180 - 身体朝向）旋转。
+    private Vec3 stonePosition(int stone) {
+        double[] p = STONE_PIVOTS[stone];
+        double angle = Math.toRadians(180.0D - yBodyRot);
+        double x = p[0] / 16.0D, z = p[2] / 16.0D;
+        double rx = x * Math.cos(angle) + z * Math.sin(angle);
+        double rz = -x * Math.sin(angle) + z * Math.cos(angle);
+        return position().add(rx, p[1] / 16.0D + 0.6D, rz);
     }
 
-    // 启动转身并冻结导航；左右动画的选择与最短偏航差保持一致。
-    private void startTurn(LivingEntity target, float yaw, float delta) {
-        attackType = TURN_ATTACK_TYPE;
-        attackCounter = TURN_DURATION;
-        attackTarget = target.getUUID();
-        turnTargetYaw = yaw;
-        entityData.set(SWING_KIND, TURN_ATTACK_TYPE);
-        entityData.set(SWING_START, level().getGameTime());
-        getNavigation().stop();
-        triggerAnim("combat", delta < 0.0F ? "turn" : "turn_left");
-        LogUtils.getLogger().debug("Thunder King turn started: delta={}, targetYaw={}", delta, yaw);
-    }
-
-    // 原版近战任务只启动动作，取消接触时立即扣血；伤害由上方命中帧统一结算。
+    // 原版近战任务只用来起手，伤害在招式事件刻统一结算。
     @Override
-    public boolean doHurtTarget(net.minecraft.world.entity.Entity target) {
-        if (!level().isClientSide && attackCounter == 0 && target instanceof LivingEntity) {
-            attackType = nextAttackType;
-            entityData.set(SWING_KIND, attackType);
-            entityData.set(SWING_START, level().getGameTime());
-            nextAttackType = (nextAttackType + 1) % 4;
-            attackTarget = target.getUUID();
-            attackCounter = attackType == 3 ? fasterTicks(46) : attackType == 1 ? fasterTicks(47) : attackType == 2 ? fasterTicks(41) : fasterTicks(33);
-            triggerAnim("combat", attackType == 3 ? "two_handed_slam" : attackType == 1 ? "double_cleave" : attackType == 2 ? "heavy_slam" : "cleave");
-            getNavigation().stop();
-            LogUtils.getLogger().debug("Thunder King attack started: type={}, target={}", attackType, attackTarget);
-            return true;
-        }
-        return false;
+    public boolean doHurtTarget(Entity target) {
+        if (skill != null || !(target instanceof LivingEntity living)) return false;
+        ThunderSkill next = MELEE_ROTATION[meleeIndex];
+        meleeIndex = (meleeIndex + 1) % MELEE_ROTATION.length;
+        startSkill(next, living);
+        return true;
     }
 
-    // 开发测试仍走正常攻击入口与命中计时，只允许无人工智能的测试实体指定招式。
+    // 保留旧版调试入口，调试命令仍可直接触发统一招式时间线。
     public void startStorm(LivingEntity target) {
-        if (level().isClientSide || attackCounter > 0) return;
-        attackType = 5;
-        attackCounter = 120;
-        attackTarget = target.getUUID();
-        // 当前战斗速率下再把引雷间隔翻倍，使该技能释放频率降低百分之五十。
-        stormCooldown = fasterTicks(360) * 2;
-        entityData.set(SWING_KIND, 5);
-        entityData.set(SWING_START, level().getGameTime());
-        getNavigation().stop();
-        triggerAnim("combat", "storm_ritual");
-        LogUtils.getLogger().debug("Thunder King storm started: target={}", attackTarget);
+        if (level().isClientSide || skill != null || target == null) return;
+        stormCooldown = 576;
+        startSkill(ThunderSkill.STORM, target);
     }
 
-    // 测试入口沿用正式攻击流程。
+    // 保留旧版测试入口，正式逻辑仍使用同一近战招式轮换。
     public void debugMelee(int kind, LivingEntity target) {
-        if (net.neoforged.fml.loading.FMLEnvironment.production || !Boolean.getBoolean("thunderrelics.debug")
-                || level().isClientSide || !isNoAi() || kind < 0 || kind > 3) return;
-        nextAttackType = kind;
-        setTarget(target);
+        if (level().isClientSide || skill != null || target == null || kind < 0 || kind >= MELEE_ROTATION.length) return;
+        meleeIndex = kind;
         doHurtTarget(target);
     }
 
-    // 玩家开始和结束追踪实体时同步增删血条，支持多人各自进出追踪范围。
+    // 玩家开始和结束追踪实体时同步增删血条。
     @Override
     public void startSeenByPlayer(ServerPlayer player) {
         super.startSeenByPlayer(player);
         bossEvent.addPlayer(player);
     }
 
-    // 卸载、离开范围和实体移除时由原版追踪流程清理玩家血条。
     @Override
     public void stopSeenByPlayer(ServerPlayer player) {
         super.stopSeenByPlayer(player);
         bossEvent.removePlayer(player);
     }
 
-    // 地面移动播放行走，停下恢复静止；服务端触发的攻击覆盖行走循环。
+    // 战斗控制器播放触发招式并按招式倍速播放，移动控制器只驱动下肢步态。
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // 起手和收招已写入动画，不额外插入控制器过渡，保证服务端命中时刻一致。
+        // 同一控制器负责移动与所有服务端触发招式，保持 1.21.1 GeckoLib 4 的网络动画同步。
         AnimationController<ThunderKingEntity> controller = new AnimationController<>(this, "combat", 0,
-                state -> onGround() && state.isMoving() ? state.setAndContinue(WALK) : PlayState.STOP)
-                .triggerableAnim("cleave", CLEAVE)
-                .triggerableAnim("double_cleave", DOUBLE_CLEAVE)
-                .triggerableAnim("heavy_slam", HEAVY_SLAM)
-                .triggerableAnim("two_handed_slam", TWO_HANDED_SLAM)
-                .triggerableAnim("javelin_throw", JAVELIN_THROW)
-                .triggerableAnim("turn", TURN)
-                .triggerableAnim("turn_left", TURN_LEFT)
-                .triggerableAnim("storm_ritual", STORM);
-        // 仅加速近战和投掷触发动画，引雷仪式继续保持完整六秒蓄力。
+                state -> onGround() && state.isMoving() ? state.setAndContinue(WALK_LEGS) : PlayState.STOP)
+                .triggerableAnim("cleave", RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "cleave"))
+                .triggerableAnim("heavy_slam", RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "heavy_slam"))
+                .triggerableAnim("two_handed_slam", RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "two_handed_slam"))
+                .triggerableAnim("javelin_throw", RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "javelin_throw"))
+                .triggerableAnim("storm_ritual", RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "storm_ritual"))
+                .triggerableAnim("relic_barrage", RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "relic_barrage"))
+                .triggerableAnim("ground_plant", RawAnimation.begin().thenPlay(ANIMATION_PREFIX + "ground_plant"));
+        // 按招式表的倍速播放动作，引雷仪式保持一比一的六秒时长。
         controller.setAnimationSpeedHandler(entity -> {
-            int kind = entity.getSwingKind();
+            ThunderSkill current = ThunderSkill.byId(entity.getSwingKind());
             double age = entity.level().getGameTime() - entity.getSwingStart();
-            boolean accelerated = kind >= 0 && kind <= 4 && age >= 0.0D
-                    && age <= (kind == 4 ? fasterTicks(52) : kind == 3 ? fasterTicks(46)
-                    : kind == 1 ? fasterTicks(47) : kind == 2 ? fasterTicks(41) : fasterTicks(33));
-            return accelerated ? COMBAT_ANIMATION_SPEED : 1.0D;
+            return current != null && age >= 0.0D && age <= current.duration ? current.speed : 1.0D;
         });
         controllers.add(controller);
     }
-
-    // GeckoLib 为每个实体提供独立动画缓存，避免不同雷霆君王互相覆盖姿态。
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return animationCache;
     }
 }
-
-
-
-
-
 
 

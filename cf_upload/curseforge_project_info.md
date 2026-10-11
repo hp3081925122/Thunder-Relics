@@ -6,7 +6,7 @@
 - 游戏版本：Minecraft 1.21.1
 - 加载器：NeoForge
 - 项目名称：Thunder Relics
-- 文件版本：1.0.2
+- 文件版本：1.2
 - 简短介绍：Adds the Thunder King boss, animated royal glaive combat, storm rituals, and a full royal armor set for Minecraft 1.21.1 NeoForge.
 
 ## 项目描述
@@ -23,5 +23,4 @@
 
 ## 构建产物
 
-- `thunderrelics-1.0.2.jar`：由 `1211-neoforge` 分支构建，已通过 Gradle `build`。
-- SHA-256：`A07C3DB5E8005B7E68687C828AD41F706AF9E9C1798655CA9BE92DDEF505ACE9`
+- `thunderrelics-1.2.jar`：由 `1211-neoforge` 分支打包。
