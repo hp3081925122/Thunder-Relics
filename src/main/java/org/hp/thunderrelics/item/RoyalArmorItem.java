@@ -7,6 +7,10 @@ import com.geckolib.animatable.client.GeoRenderProvider;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.renderer.GeoArmorRenderer;
+import com.geckolib.renderer.base.GeoRenderState;
+import com.geckolib.renderer.base.GeoRenderer;
+import com.geckolib.renderer.layer.GeoRenderLayer;
+import com.geckolib.renderer.layer.builtin.AutoGlowingGeoLayer;
 import com.geckolib.util.GeckoLibUtil;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.network.chat.Component;
@@ -86,6 +90,15 @@ public final class RoyalArmorItem extends Item implements GeoItem {
                 if (renderer == null) {
                     renderer = new GeoArmorRenderer<>(new RoyalEquipmentModel<>(
                             "royal_armor", "textures/armor/royal_armor.png"));
+                    // 自动读取 royal_armor_glowmask.png，让雷纹与宝石全亮发光
+                    // HumanoidRenderState 运行时才由 GeckoLib 混入 GeoRenderState，编译期用原始类型挂载
+                    renderer.withRenderLayer((GeoRenderLayer) new AutoGlowingGeoLayer((GeoRenderer) renderer) {
+                        // 关闭视空间 Z 偏移，避免发光面穿过遮挡并在物品栏中闪烁
+                        @Override
+                        protected boolean shouldAddZOffset(GeoRenderState renderState) {
+                            return false;
+                        }
+                    });
                 }
                 return renderer;
             }
